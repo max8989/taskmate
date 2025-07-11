@@ -1,3 +1,4 @@
+import { isBefore, parseISO, startOfDay } from 'date-fns'
 import { useRouter } from 'expo-router'
 import React, { useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -90,13 +91,25 @@ export default function TasksScreen() {
 
   // Filter assignments by status
   const todayAssignments = userAssignments?.filter(assignment => {
-    const today = new Date().toISOString().split('T')[0]
-    return assignment.due_date === today && !assignment.is_completed
+    const today = startOfDay(new Date())
+    const dueDate = startOfDay(parseISO(assignment.due_date))
+    const isDueToday = dueDate.getTime() === today.getTime() && !assignment.is_completed
+    
+    // Also include tasks that can be completed right now (earliest completion time has passed)
+    const canComplete = !assignment.is_completed && canCompleteTask(assignment.tasks, assignment).allowed
+    
+    return isDueToday || canComplete
   }) || []
 
   const upcomingAssignments = userAssignments?.filter(assignment => {
-    const today = new Date().toISOString().split('T')[0]
-    return assignment.due_date > today && !assignment.is_completed
+    const today = startOfDay(new Date())
+    const dueDate = startOfDay(parseISO(assignment.due_date))
+    const isUpcoming = dueDate > today && !assignment.is_completed
+    
+    // Exclude tasks that can be completed now (they should be in "Due Today")
+    const canComplete = canCompleteTask(assignment.tasks, assignment).allowed
+    
+    return isUpcoming && !canComplete
   }) || []
 
   const completedAssignments = userAssignments?.filter(assignment => 
@@ -109,13 +122,15 @@ export default function TasksScreen() {
   ) || []
   
   const householdOverdueAssignments = householdPendingAssignments.filter(assignment => {
-    const today = new Date().toISOString().split('T')[0]
-    return assignment.due_date < today
+    const today = startOfDay(new Date())
+    const dueDate = startOfDay(parseISO(assignment.due_date))
+    return isBefore(dueDate, today)
   })
   
   const householdTodayAssignments = householdPendingAssignments.filter(assignment => {
-    const today = new Date().toISOString().split('T')[0]
-    return assignment.due_date === today
+    const today = startOfDay(new Date())
+    const dueDate = startOfDay(parseISO(assignment.due_date))
+    return dueDate.getTime() === today.getTime()
   })
 
   return (
@@ -361,7 +376,11 @@ function SimpleTaskCard({ assignment, task, completed = false }: {
     }
   }
 
-  const isOverdue = assignment && !completed && new Date(assignment.due_date) < new Date()
+  const isOverdue = assignment && !completed && (() => {
+    const today = startOfDay(new Date())
+    const dueDate = startOfDay(parseISO(assignment.due_date))
+    return isBefore(dueDate, today)
+  })()
 
   const handleCardPress = () => {
     if (assignment && !completed && completionCheck.allowed) {
@@ -502,7 +521,11 @@ function HouseholdTaskCard({ assignment }: { assignment: any }) {
     }
   }
 
-  const isOverdue = new Date(assignment.due_date) < new Date()
+  const isOverdue = (() => {
+    const today = startOfDay(new Date())
+    const dueDate = startOfDay(parseISO(assignment.due_date))
+    return isBefore(dueDate, today)
+  })()
   const isAssignedToCurrentUser = assignment.assigned_to === user?.id
 
   const handleCardPress = () => {

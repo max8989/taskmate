@@ -152,6 +152,7 @@ export function TaskCreateScreen() {
     scheduled_days: [] as number[],
     scheduled_time: '09:00',
     earliest_completion_time: '',
+    notify_on_incomplete: false,
   })
   
   const [selectedParticipants, setSelectedParticipants] = useState<string[]>([])
@@ -188,6 +189,7 @@ export function TaskCreateScreen() {
       scheduled_days: formData.is_recurring && formData.scheduled_days.length > 0 ? formData.scheduled_days : null,
       scheduled_time: formData.is_recurring ? formData.scheduled_time : null,
       earliest_completion_time: formData.earliest_completion_time.trim() || null,
+      notify_on_incomplete: formData.notify_on_incomplete,
     }
 
     createTaskMutation.mutate({
@@ -446,6 +448,25 @@ export function TaskCreateScreen() {
                 Users can only complete after this time on due date
               </Text>
             </TouchableOpacity>
+          </View>
+
+          {/* Notify on Incomplete Toggle */}
+          <View style={styles.inputGroup}>
+            <View style={styles.switchContainer}>
+              <Text style={styles.label}>Notify on Incomplete</Text>
+              <Switch
+                value={formData.notify_on_incomplete}
+                onValueChange={(value) => setFormData(prev => ({ ...prev, notify_on_incomplete: value }))}
+                trackColor={{ false: '#E2E8F0', true: '#FF6B4D' }}
+                thumbColor={formData.notify_on_incomplete ? '#FFFFFF' : '#9CA3AF'}
+              />
+            </View>
+            <Text style={styles.helpText}>
+              {formData.notify_on_incomplete 
+                ? 'Users will receive a notification if they do not complete this task by its scheduled time.' 
+                : 'Users will not receive notifications for incomplete tasks.'
+              }
+            </Text>
           </View>
 
           {/* Participants Selection */}

@@ -68,7 +68,8 @@ CREATE TABLE tasks (
     frequency_value INTEGER DEFAULT 1,
     points_value INTEGER DEFAULT 10,
     created_by UUID REFERENCES profiles(id),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    notify_on_incomplete BOOLEAN DEFAULT FALSE
 );
 
 -- Task assignments

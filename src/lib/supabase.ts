@@ -87,6 +87,7 @@ export interface Database {
           is_deleted: boolean
           deleted_at: string | null
           deleted_by: string | null
+          notify_on_incomplete: boolean
         }
         Insert: {
           id?: string
@@ -106,6 +107,7 @@ export interface Database {
           is_deleted?: boolean
           deleted_at?: string | null
           deleted_by?: string | null
+          notify_on_incomplete?: boolean
         }
         Update: {
           id?: string
@@ -125,6 +127,7 @@ export interface Database {
           is_deleted?: boolean
           deleted_at?: string | null
           deleted_by?: string | null
+          notify_on_incomplete?: boolean
         }
       }
       task_assignments: {

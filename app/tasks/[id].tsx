@@ -1,3 +1,4 @@
+import { isBefore, parseISO, startOfDay } from 'date-fns'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router'
 import React from 'react'
@@ -313,7 +314,11 @@ export default function TaskDetailScreen() {
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Pending Assignments</Text>
                 {pendingAssignments.map((assignment: any) => {
-                  const isOverdue = new Date(assignment.due_date) < new Date()
+                  const isOverdue = (() => {
+                    const today = startOfDay(new Date())
+                    const dueDate = startOfDay(parseISO(assignment.due_date))
+                    return isBefore(dueDate, today)
+                  })()
                   const completionCheck = canCompleteTask(task, assignment)
                   const isAssignedToCurrentUser = assignment.assigned_to === user?.id
                   

@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { isBefore, parseISO, startOfDay } from 'date-fns'
 import { useRouter } from 'expo-router'
 import { Alert } from 'react-native'
 import { supabase, TablesInsert } from '../lib/supabase'
@@ -131,8 +132,10 @@ async function updateUserStreak(userId: string): Promise<{ newStreak: number; st
 
 // Check if task was completed early
 function isCompletedEarly(dueDate: string, completedAt: Date): boolean {
-  const due = new Date(dueDate)
-  return completedAt < due
+  // Compare just the date parts using date-fns for robust comparison
+  const dueDateNormalized = startOfDay(parseISO(dueDate))
+  const completedDateNormalized = startOfDay(completedAt)
+  return isBefore(completedDateNormalized, dueDateNormalized)
 }
 
 // Check if completion is allowed based on earliest completion time
