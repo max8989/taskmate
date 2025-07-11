@@ -69,6 +69,72 @@ function calculateNextDueDate(
   return nextDate
 }
 
+// Points calculation system
+function calculateTaskPoints(task: any, assignment: any, completedEarly: boolean = false): number {
+  let points = task.points_value || 10 // Base points
+  
+  // Early completion bonus
+  if (completedEarly) {
+    points += 2
+  }
+  
+  // Difficult task bonus based on frequency (less frequent = more difficult)
+  if (task.frequency_type === 'monthly') {
+    points += 5
+  } else if (task.frequency_type === 'weekly') {
+    points += 2
+  }
+  
+  return points
+}
+
+// Streak calculation
+async function updateUserStreak(userId: string): Promise<{ newStreak: number; streakBonus: number }> {
+  // Get user's current profile
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('current_streak, total_points')
+    .eq('id', userId)
+    .single()
+    
+  if (profileError || !profile) {
+    return { newStreak: 1, streakBonus: 0 }
+  }
+  
+  // Check if user completed any task yesterday
+  const yesterday = new Date()
+  yesterday.setDate(yesterday.getDate() - 1)
+  const yesterdayStr = yesterday.toISOString().split('T')[0]
+  
+  const { data: yesterdayCompletions, error: yesterdayError } = await supabase
+    .from('task_assignments')
+    .select('id')
+    .eq('completed_by', userId)
+    .eq('is_completed', true)
+    .gte('completed_at', yesterdayStr + 'T00:00:00Z')
+    .lt('completed_at', yesterdayStr + 'T23:59:59Z')
+  
+  let newStreak: number
+  if (yesterdayError || !yesterdayCompletions || yesterdayCompletions.length === 0) {
+    // No completion yesterday, reset streak
+    newStreak = 1
+  } else {
+    // Had completion yesterday, continue streak
+    newStreak = profile.current_streak + 1
+  }
+  
+  // Calculate streak bonus (+5 points per day in streak)
+  const streakBonus = newStreak * 5
+  
+  return { newStreak, streakBonus }
+}
+
+// Check if task was completed early
+function isCompletedEarly(dueDate: string, completedAt: Date): boolean {
+  const due = new Date(dueDate)
+  return completedAt < due
+}
+
 async function getNextAssignee(taskId: string, currentAssigneeId: string): Promise<string | null> {
   // Get all participants for this task, ordered by rotation_order
   const { data: participants, error } = await supabase
@@ -511,7 +577,7 @@ export function useDeleteTask() {
   })
 }
 
-// Complete task assignment mutation
+// Complete task assignment mutation with points and streak tracking
 export function useCompleteTaskAssignment() {
   const queryClient = useQueryClient()
   
@@ -523,11 +589,35 @@ export function useCompleteTaskAssignment() {
       assignmentId: string
       completedBy: string
     }) => {
-      const { data: assignment, error } = await supabase
+      const completedAt = new Date()
+      
+      // First, get the assignment and task details
+      const { data: assignment, error: getError } = await supabase
+        .from('task_assignments')
+        .select(`
+          *,
+          tasks(*)
+        `)
+        .eq('id', assignmentId)
+        .single()
+      
+      if (getError || !assignment) throw getError || new Error('Assignment not found')
+      
+      // Calculate points and bonuses
+      const wasCompletedEarly = isCompletedEarly(assignment.due_date, completedAt)
+      const basePoints = calculateTaskPoints(assignment.tasks, assignment, wasCompletedEarly)
+      
+      // Update streak and get streak bonus
+      const { newStreak, streakBonus } = await updateUserStreak(completedBy)
+      
+      const totalPoints = basePoints + streakBonus
+      
+      // Mark assignment as completed
+      const { data: updatedAssignment, error: updateError } = await supabase
         .from('task_assignments')
         .update({
           is_completed: true,
-          completed_at: new Date().toISOString(),
+          completed_at: completedAt.toISOString(),
           completed_by: completedBy,
         })
         .eq('id', assignmentId)
@@ -537,7 +627,29 @@ export function useCompleteTaskAssignment() {
         `)
         .single()
       
-      if (error) throw error
+      if (updateError) throw updateError
+      
+      // Update user's points and streak in profile
+      const { data: currentProfile, error: getProfileError } = await supabase
+        .from('profiles')
+        .select('total_points')
+        .eq('id', completedBy)
+        .single()
+        
+      if (!getProfileError && currentProfile) {
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .update({
+            total_points: currentProfile.total_points + totalPoints,
+            current_streak: newStreak,
+          })
+          .eq('id', completedBy)
+          
+        if (profileError) {
+          console.error('Error updating user profile:', profileError)
+          // Don't throw error here as the main task completion was successful
+        }
+      }
       
       // If it's a recurring task, create next assignment with proper rotation
       if (assignment.tasks?.is_recurring && assignment.tasks.frequency_type) {
@@ -571,19 +683,41 @@ export function useCompleteTaskAssignment() {
         }
       }
       
-      return assignment
+      return {
+        assignment: updatedAssignment,
+        pointsEarned: totalPoints,
+        streakBonus,
+        newStreak,
+        wasCompletedEarly
+      }
     },
-    onSuccess: (assignment) => {
+    onSuccess: (result) => {
+      const { assignment, pointsEarned, streakBonus, newStreak, wasCompletedEarly } = result
+      
       // Invalidate relevant queries
       queryClient.invalidateQueries({ queryKey: taskKeys.assignments(assignment.tasks?.household_id!) })
       queryClient.invalidateQueries({ queryKey: taskKeys.userAssignments(assignment.assigned_to) })
+      queryClient.invalidateQueries({ queryKey: taskKeys.userAssignments(assignment.completed_by!) })
       
-      // Update user points (simplified for now)
-      // TODO: Implement proper points calculation
+      // Invalidate profile data to update points and streak
+      queryClient.invalidateQueries({ queryKey: ['auth', 'profile', assignment.completed_by] })
       
-      Alert.alert('Great job!', `You completed "${assignment.tasks?.title}"!`)
+      // Show success message with points breakdown
+      let message = `You completed "${assignment.tasks?.title}"!\n\n`
+      message += `🎉 +${pointsEarned} points earned!\n`
+      
+      if (streakBonus > 0) {
+        message += `🔥 Streak bonus: +${streakBonus} points (${newStreak} day streak)\n`
+      }
+      
+      if (wasCompletedEarly) {
+        message += `⚡ Early completion bonus: +2 points\n`
+      }
+      
+      Alert.alert('Great job!', message)
     },
     onError: (error: any) => {
+      console.error('Error completing task:', error)
       Alert.alert('Error', error.message || 'Failed to complete task')
     },
   })
@@ -702,6 +836,176 @@ export function useReassignTaskAssignment() {
     },
     onError: (error: any) => {
       Alert.alert('Error', error.message || 'Failed to reassign task')
+    },
+  })
+}
+
+// Complete any task assignment (allows any household member to complete any task)
+export function useCompleteAnyTaskAssignment() {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: async ({ 
+      assignmentId, 
+      completedBy 
+    }: { 
+      assignmentId: string
+      completedBy: string
+    }) => {
+      const completedAt = new Date()
+      
+      // First, get the assignment and task details
+      const { data: assignment, error: getError } = await supabase
+        .from('task_assignments')
+        .select(`
+          *,
+          tasks(*),
+          assigned_to_profile:profiles!assigned_to(id, display_name)
+        `)
+        .eq('id', assignmentId)
+        .single()
+      
+      if (getError || !assignment) throw getError || new Error('Assignment not found')
+      
+      // Verify the person completing is in the same household
+      const { data: completedByProfile, error: profileError } = await supabase
+        .from('profiles')
+        .select('household_id')
+        .eq('id', completedBy)
+        .single()
+        
+      if (profileError || !completedByProfile) {
+        throw new Error('User profile not found')
+      }
+      
+      if (completedByProfile.household_id !== assignment.tasks?.household_id) {
+        throw new Error('You can only complete tasks in your household')
+      }
+      
+      // Calculate points and bonuses
+      const wasCompletedEarly = isCompletedEarly(assignment.due_date, completedAt)
+      const basePoints = calculateTaskPoints(assignment.tasks, assignment, wasCompletedEarly)
+      
+      // Update streak and get streak bonus
+      const { newStreak, streakBonus } = await updateUserStreak(completedBy)
+      
+      const totalPoints = basePoints + streakBonus
+      
+      // Mark assignment as completed
+      const { data: updatedAssignment, error: updateError } = await supabase
+        .from('task_assignments')
+        .update({
+          is_completed: true,
+          completed_at: completedAt.toISOString(),
+          completed_by: completedBy,
+        })
+        .eq('id', assignmentId)
+        .select(`
+          *,
+          tasks(*),
+          assigned_to_profile:profiles!assigned_to(id, display_name),
+          completed_by_profile:profiles!completed_by(id, display_name)
+        `)
+        .single()
+      
+      if (updateError) throw updateError
+      
+      // Update user's points and streak in profile
+      const { data: currentProfile, error: getProfileError } = await supabase
+        .from('profiles')
+        .select('total_points')
+        .eq('id', completedBy)
+        .single()
+        
+      if (!getProfileError && currentProfile) {
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .update({
+            total_points: currentProfile.total_points + totalPoints,
+            current_streak: newStreak,
+          })
+          .eq('id', completedBy)
+          
+        if (profileError) {
+          console.error('Error updating user profile:', profileError)
+          // Don't throw error here as the main task completion was successful
+        }
+      }
+      
+      // If it's a recurring task, create next assignment with proper rotation
+      if (assignment.tasks?.is_recurring && assignment.tasks.frequency_type) {
+        // Calculate next due date with scheduling preferences
+        const nextDueDate = calculateNextDueDate(
+          assignment.tasks.frequency_type,
+          assignment.tasks.frequency_value || 1,
+          new Date(assignment.due_datetime || assignment.due_date),
+          assignment.tasks.scheduled_days,
+          assignment.tasks.scheduled_time
+        )
+        
+        // Get next assignee in rotation (continue from originally assigned person)
+        const nextAssignee = await getNextAssignee(assignment.task_id, assignment.assigned_to)
+        
+        if (nextAssignee) {
+          const { error: nextAssignmentError } = await supabase
+            .from('task_assignments')
+            .insert({
+              task_id: assignment.task_id,
+              assigned_to: nextAssignee,
+              due_date: nextDueDate.toISOString().split('T')[0],
+              due_datetime: nextDueDate.toISOString(),
+              rotation_order: (assignment.rotation_order || 0) + 1,
+            })
+          
+          if (nextAssignmentError) {
+            console.error('Error creating next assignment:', nextAssignmentError)
+            // Don't throw error here as the main task completion was successful
+          }
+        }
+      }
+      
+      return {
+        assignment: updatedAssignment,
+        pointsEarned: totalPoints,
+        streakBonus,
+        newStreak,
+        wasCompletedEarly,
+        wasCompletedByAssignee: assignment.assigned_to === completedBy
+      }
+    },
+    onSuccess: (result) => {
+      const { assignment, pointsEarned, streakBonus, newStreak, wasCompletedEarly, wasCompletedByAssignee } = result
+      
+      // Invalidate relevant queries
+      queryClient.invalidateQueries({ queryKey: taskKeys.assignments(assignment.tasks?.household_id!) })
+      queryClient.invalidateQueries({ queryKey: taskKeys.userAssignments(assignment.assigned_to) })
+      queryClient.invalidateQueries({ queryKey: taskKeys.userAssignments(assignment.completed_by!) })
+      
+      // Invalidate profile data to update points and streak
+      queryClient.invalidateQueries({ queryKey: ['auth', 'profile', assignment.completed_by] })
+      
+      // Show success message with points breakdown
+      let message = `You completed "${assignment.tasks?.title}"!\n\n`
+      
+      if (!wasCompletedByAssignee) {
+        message += `💪 Helped out ${assignment.assigned_to_profile?.display_name}!\n\n`
+      }
+      
+      message += `🎉 +${pointsEarned} points earned!\n`
+      
+      if (streakBonus > 0) {
+        message += `🔥 Streak bonus: +${streakBonus} points (${newStreak} day streak)\n`
+      }
+      
+      if (wasCompletedEarly) {
+        message += `⚡ Early completion bonus: +2 points\n`
+      }
+      
+      Alert.alert('Great job!', message)
+    },
+    onError: (error: any) => {
+      console.error('Error completing task:', error)
+      Alert.alert('Error', error.message || 'Failed to complete task')
     },
   })
 }

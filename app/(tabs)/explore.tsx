@@ -3,7 +3,7 @@ import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { useAuth } from '../../hooks/useAuth'
-import { useCompleteTaskAssignment, useTaskPendingAssignments, useTasks, useUserTaskAssignments } from '../../src/hooks/useTaskQuery'
+import { useCompleteAnyTaskAssignment, useTaskAssignments, useTaskPendingAssignments, useTasks, useUserTaskAssignments } from '../../src/hooks/useTaskQuery'
 
 export default function TasksScreen() {
   const { t } = useTranslation()
@@ -12,12 +12,13 @@ export default function TasksScreen() {
   
   const { data: tasks, isLoading: tasksLoading } = useTasks(profile?.household_id)
   const { data: userAssignments, isLoading: assignmentsLoading } = useUserTaskAssignments(user?.id || null)
+  const { data: allAssignments, isLoading: allAssignmentsLoading } = useTaskAssignments(profile?.household_id)
 
   const handleCreateTask = () => {
     router.push('/tasks/create')
   }
 
-  if (tasksLoading || assignmentsLoading) {
+  if (tasksLoading || assignmentsLoading || allAssignmentsLoading) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#FF6B4D" />
@@ -40,6 +41,21 @@ export default function TasksScreen() {
   const completedAssignments = userAssignments?.filter(assignment => 
     assignment.is_completed
   )?.slice(0, 3) || []
+
+  // Filter all household assignments for "anyone can complete" section
+  const householdPendingAssignments = allAssignments?.filter(assignment => 
+    !assignment.is_completed
+  ) || []
+  
+  const householdOverdueAssignments = householdPendingAssignments.filter(assignment => {
+    const today = new Date().toISOString().split('T')[0]
+    return assignment.due_date < today
+  })
+  
+  const householdTodayAssignments = householdPendingAssignments.filter(assignment => {
+    const today = new Date().toISOString().split('T')[0]
+    return assignment.due_date === today
+  })
 
   return (
     <ScrollView style={styles.container}>
@@ -82,6 +98,27 @@ export default function TasksScreen() {
         )}
       </View>
 
+      {/* New section: Household Tasks Anyone Can Complete */}
+      {householdOverdueAssignments.length > 0 && (
+        <View style={styles.sectionContainer}>
+          <Text style={styles.sectionTitle}>🚨 Overdue Household Tasks ({householdOverdueAssignments.length})</Text>
+          <Text style={styles.sectionSubtitle}>Help out by completing these overdue tasks!</Text>
+          {householdOverdueAssignments.slice(0, 3).map((assignment) => (
+            <HouseholdTaskCard key={assignment.id} assignment={assignment} />
+          ))}
+        </View>
+      )}
+
+      {householdTodayAssignments.length > 0 && (
+        <View style={styles.sectionContainer}>
+          <Text style={styles.sectionTitle}>🏠 Household Tasks Due Today ({householdTodayAssignments.length})</Text>
+          <Text style={styles.sectionSubtitle}>Anyone can complete these tasks to help the household!</Text>
+          {householdTodayAssignments.slice(0, 5).map((assignment) => (
+            <HouseholdTaskCard key={assignment.id} assignment={assignment} />
+          ))}
+        </View>
+      )}
+
               <View style={styles.sectionContainer}>
           <Text style={styles.sectionTitle}>🏠 All Household Tasks ({tasks?.length || 0})</Text>
           {tasks && tasks.length > 0 ? (
@@ -115,7 +152,7 @@ function SimpleTaskCard({ assignment, task, completed = false }: {
   completed?: boolean
 }) {
   const { user } = useAuth()
-  const completeTaskMutation = useCompleteTaskAssignment()
+  const completeTaskMutation = useCompleteAnyTaskAssignment()
   const displayTask = assignment?.tasks || task
   
   if (!displayTask) return null
@@ -209,6 +246,104 @@ function SimpleTaskCard({ assignment, task, completed = false }: {
           </Text>
         </View>
       )}
+    </TouchableOpacity>
+  )
+}
+
+// Household Task Card Component - allows any user to complete any task
+function HouseholdTaskCard({ assignment }: { assignment: any }) {
+  const { user } = useAuth()
+  const completeTaskMutation = useCompleteAnyTaskAssignment()
+  
+  if (!assignment?.tasks) return null
+
+  const handleCompleteTask = () => {
+    Alert.alert(
+      'Complete Task',
+      `Mark "${assignment.tasks.title}" as completed?\n\nThis task is assigned to ${assignment.assigned_to_profile?.display_name}, but you can complete it to help out!`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Complete', 
+          onPress: () => {
+            completeTaskMutation.mutate({
+              assignmentId: assignment.id,
+              completedBy: user?.id!,
+            })
+          }
+        }
+      ]
+    )
+  }
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString)
+    const today = new Date()
+    const tomorrow = new Date(today)
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    
+    if (date.toDateString() === today.toDateString()) {
+      return 'Today'
+    } else if (date.toDateString() === tomorrow.toDateString()) {
+      return 'Tomorrow'
+    } else {
+      return date.toLocaleDateString()
+    }
+  }
+
+  const isOverdue = new Date(assignment.due_date) < new Date()
+  const isAssignedToCurrentUser = assignment.assigned_to === user?.id
+
+  return (
+    <TouchableOpacity 
+      style={[
+        styles.taskCard, 
+        isOverdue && styles.overdueTask,
+        !isAssignedToCurrentUser && styles.householdTaskCard
+      ]}
+      onPress={handleCompleteTask}
+      disabled={completeTaskMutation.isPending}
+    >
+      <View style={styles.taskHeader}>
+        <View style={styles.taskTitleContainer}>
+          <Text style={styles.taskTitle}>
+            {assignment.tasks.title}
+          </Text>
+          {assignment.tasks.is_recurring && (
+            <Text style={styles.recurringBadge}>🔄</Text>
+          )}
+        </View>
+        <Text style={styles.taskPoints}>{assignment.tasks.points_value} pts</Text>
+      </View>
+      
+      {assignment.tasks.description && (
+        <Text style={styles.taskDescription} numberOfLines={1}>
+          {assignment.tasks.description}
+        </Text>
+      )}
+      
+      <View style={styles.assignmentInfo}>
+        <Text style={styles.assignmentText}>
+          Assigned to: {assignment.assigned_to_profile?.display_name}
+          {isAssignedToCurrentUser && ' (You)'}
+        </Text>
+        <Text style={[
+          styles.dueDateText,
+          isOverdue && styles.overdueText
+        ]}>
+          Due: {formatDate(assignment.due_date)}
+          {isOverdue && ' (Overdue)'}
+        </Text>
+      </View>
+      
+      <View style={styles.tapHintContainer}>
+        <Text style={styles.tapHint}>
+          {completeTaskMutation.isPending ? 'Completing...' : 
+           isAssignedToCurrentUser ? 'Tap to complete your task' : 
+           'Tap to help complete this task'
+          }
+        </Text>
+      </View>
     </TouchableOpacity>
   )
 }
@@ -352,6 +487,12 @@ const styles = StyleSheet.create({
     color: '#2D3748',
     marginBottom: 12,
   },
+  sectionSubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 12,
+    fontStyle: 'italic',
+  },
   emptyState: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
@@ -388,6 +529,11 @@ const styles = StyleSheet.create({
   completedTask: {
     backgroundColor: '#F7FAFC',
     opacity: 0.8,
+  },
+  householdTaskCard: {
+    borderWidth: 2,
+    borderColor: '#48BB78',
+    backgroundColor: '#F0FFF4',
   },
   taskHeader: {
     flexDirection: 'row',
