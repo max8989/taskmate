@@ -84,6 +84,9 @@ export interface Database {
           scheduled_days: number[] | null
           scheduled_time: string | null
           earliest_completion_time: string | null
+          is_deleted: boolean
+          deleted_at: string | null
+          deleted_by: string | null
         }
         Insert: {
           id?: string
@@ -100,6 +103,9 @@ export interface Database {
           scheduled_days?: number[] | null
           scheduled_time?: string | null
           earliest_completion_time?: string | null
+          is_deleted?: boolean
+          deleted_at?: string | null
+          deleted_by?: string | null
         }
         Update: {
           id?: string
@@ -116,6 +122,9 @@ export interface Database {
           scheduled_days?: number[] | null
           scheduled_time?: string | null
           earliest_completion_time?: string | null
+          is_deleted?: boolean
+          deleted_at?: string | null
+          deleted_by?: string | null
         }
       }
       task_assignments: {

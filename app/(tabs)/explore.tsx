@@ -185,6 +185,7 @@ function SimpleTaskCard({ assignment, task, completed = false }: {
   completed?: boolean
 }) {
   const { user } = useAuth()
+  const router = useRouter()
   const completeTaskMutation = useCompleteAnyTaskAssignment()
   const displayTask = assignment?.tasks || task
   
@@ -239,6 +240,15 @@ function SimpleTaskCard({ assignment, task, completed = false }: {
 
   const isOverdue = assignment && !completed && new Date(assignment.due_date) < new Date()
 
+  const handleCardPress = () => {
+    if (assignment && !completed && completionCheck.allowed) {
+      handleCompleteTask()
+    } else if (displayTask?.id) {
+      // Navigate to task detail screen
+      router.push(`/tasks/${displayTask.id}`)
+    }
+  }
+
   return (
     <TouchableOpacity 
       style={[
@@ -246,7 +256,8 @@ function SimpleTaskCard({ assignment, task, completed = false }: {
         completed && styles.completedTask,
         isOverdue && styles.overdueTask
       ]}
-      onPress={assignment && !completed ? handleCompleteTask : undefined}
+      onPress={handleCardPress}
+      onLongPress={() => displayTask?.id && router.push(`/tasks/${displayTask.id}`)}
       disabled={completeTaskMutation.isPending}
     >
       <View style={styles.taskHeader}>
@@ -301,8 +312,8 @@ function SimpleTaskCard({ assignment, task, completed = false }: {
             !completionCheck.allowed && styles.restrictedTimeText
           ]}>
             {completeTaskMutation.isPending ? 'Completing...' : 
-             !completionCheck.allowed ? completionCheck.message :
-             'Tap to complete'
+             !completionCheck.allowed ? 'Tap for details • ' + completionCheck.message :
+             'Tap to complete • Long press for details'
             }
           </Text>
         </View>
@@ -314,6 +325,7 @@ function SimpleTaskCard({ assignment, task, completed = false }: {
 // Household Task Card Component - allows any user to complete any task
 function HouseholdTaskCard({ assignment }: { assignment: any }) {
   const { user } = useAuth()
+  const router = useRouter()
   const completeTaskMutation = useCompleteAnyTaskAssignment()
   
   if (!assignment?.tasks) return null
@@ -366,6 +378,15 @@ function HouseholdTaskCard({ assignment }: { assignment: any }) {
   const isOverdue = new Date(assignment.due_date) < new Date()
   const isAssignedToCurrentUser = assignment.assigned_to === user?.id
 
+  const handleCardPress = () => {
+    if (completionCheck.allowed) {
+      handleCompleteTask()
+    } else {
+      // Navigate to task detail screen for restricted tasks
+      router.push(`/tasks/${assignment.tasks.id}`)
+    }
+  }
+
   return (
     <TouchableOpacity 
       style={[
@@ -373,7 +394,7 @@ function HouseholdTaskCard({ assignment }: { assignment: any }) {
         isOverdue && styles.overdueTask,
         !isAssignedToCurrentUser && styles.householdTaskCard
       ]}
-      onPress={handleCompleteTask}
+      onPress={handleCardPress}
       disabled={completeTaskMutation.isPending}
     >
       <View style={styles.taskHeader}>
@@ -437,9 +458,14 @@ function HouseholdTaskCard({ assignment }: { assignment: any }) {
 
 // Task Detail Component for testing rotation
 function TaskDetailCard({ task }: { task: any }) {
+  const router = useRouter()
   const { data: pendingAssignments } = useTaskPendingAssignments(task?.id)
   
   if (!task) return null
+
+  const handlePress = () => {
+    router.push(`/tasks/${task.id}`)
+  }
 
   const formatScheduledDays = (days: number[]) => {
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -455,7 +481,7 @@ function TaskDetailCard({ task }: { task: any }) {
   }
 
   return (
-    <View style={styles.taskDetailCard}>
+    <TouchableOpacity style={styles.taskDetailCard} onPress={handlePress}>
       <Text style={styles.taskDetailTitle}>{task.title}</Text>
       {task.description && (
         <Text style={styles.taskDetailDescription}>{task.description}</Text>
@@ -505,11 +531,15 @@ function TaskDetailCard({ task }: { task: any }) {
             <Text key={participant.id} style={styles.participant}>
               {index + 1}. {participant.profiles?.display_name}
             </Text>
-          ))}
-        </View>
-      )}
+                  ))}
+      </View>
+    )}
+    
+    <View style={styles.tapHintContainer}>
+      <Text style={styles.tapHint}>Tap for details</Text>
     </View>
-  )
+  </TouchableOpacity>
+)
 }
 
 const styles = StyleSheet.create({

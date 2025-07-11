@@ -281,6 +281,7 @@ export function useTasks(householdId: string | null) {
           )
         `)
         .eq('household_id', householdId)
+        .eq('is_deleted', false)
         .order('created_at', { ascending: false })
       
       if (error) throw error
@@ -291,7 +292,7 @@ export function useTasks(householdId: string | null) {
   })
 }
 
-// Get single task details
+// Get single task details (includes deleted tasks for history)
 export function useTask(taskId: string | null) {
   return useQuery({
     queryKey: taskKeys.detail(taskId!),
@@ -303,6 +304,7 @@ export function useTask(taskId: string | null) {
         .select(`
           *,
           created_by_profile:profiles!created_by(id, display_name),
+          deleted_by_profile:profiles!deleted_by(id, display_name),
           task_participants(
             id,
             user_id,
@@ -338,6 +340,7 @@ export function useTaskAssignments(householdId: string | null) {
           completed_by_profile:profiles!completed_by(id, display_name)
         `)
         .eq('tasks.household_id', householdId)
+        .eq('tasks.is_deleted', false)
         .order('due_date', { ascending: true })
       
       if (error) throw error
@@ -364,6 +367,7 @@ export function useUserTaskAssignments(userId: string | null) {
           completed_by_profile:profiles!completed_by(id, display_name)
         `)
         .eq('assigned_to', userId)
+        .eq('tasks.is_deleted', false)
         .order('due_date', { ascending: true })
       
       if (error) throw error
@@ -399,7 +403,7 @@ export function useTaskParticipants(taskId: string | null) {
   })
 }
 
-// Get pending assignments for a specific task
+// Get pending assignments for a specific task (includes deleted tasks for history view)
 export function useTaskPendingAssignments(taskId: string | null) {
   return useQuery({
     queryKey: [...taskKeys.detail(taskId!), 'pending-assignments'],
@@ -565,39 +569,45 @@ export function useUpdateTask() {
   })
 }
 
-// Delete task mutation
+// Soft delete task mutation
 export function useDeleteTask() {
   const queryClient = useQueryClient()
   const router = useRouter()
   
   return useMutation({
-    mutationFn: async (taskId: string) => {
-      // Delete task participants first
-      await supabase
-        .from('task_participants')
-        .delete()
-        .eq('task_id', taskId)
-      
-      // Delete task assignments
-      await supabase
-        .from('task_assignments')
-        .delete()
-        .eq('task_id', taskId)
-      
-      // Delete the task
-      const { error } = await supabase
+    mutationFn: async ({ taskId, deletedBy }: { taskId: string; deletedBy: string }) => {
+      // Soft delete the task by marking it as deleted
+      const { data: task, error } = await supabase
         .from('tasks')
-        .delete()
+        .update({
+          is_deleted: true,
+          deleted_at: new Date().toISOString(),
+          deleted_by: deletedBy,
+        })
         .eq('id', taskId)
+        .select()
+        .single()
       
       if (error) throw error
-      return taskId
-    },
-    onSuccess: (taskId) => {
-      // Remove from cache
-      queryClient.removeQueries({ queryKey: taskKeys.detail(taskId) })
       
-      // Invalidate lists
+      // Also soft delete related task assignments to prevent them from showing up
+      await supabase
+        .from('task_assignments')
+        .update({
+          is_completed: true,  // Mark as completed to prevent further interaction
+          completed_at: new Date().toISOString(),
+          completed_by: deletedBy,
+        })
+        .eq('task_id', taskId)
+        .eq('is_completed', false)  // Only update pending assignments
+      
+      return task
+    },
+    onSuccess: (task) => {
+      // Remove from cache
+      queryClient.removeQueries({ queryKey: taskKeys.detail(task.id) })
+      
+      // Invalidate lists to remove the task from views
       queryClient.invalidateQueries({ queryKey: taskKeys.lists() })
       queryClient.invalidateQueries({ queryKey: taskKeys.all })
       
