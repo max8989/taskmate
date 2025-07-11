@@ -321,8 +321,8 @@ async function scheduleReminderNotifications(assignment: TaskAssignment, task: T
 - [x] User authentication and household management
 - [x] Task creation (one-time and recurring)
 - [x] Task assignment and rotation
-- [ ] Task completion with points
-- [ ] Streak tracking and leaderboard
+- [x] Task completion with points
+- [x] Streak tracking and leaderboard (basic implementation)
 - [ ] Push notifications
 - [ ] Admin features
 - [ ] Bilingual support (EN/FR)

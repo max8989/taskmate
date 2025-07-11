@@ -52,6 +52,7 @@ export function TaskCreateScreen() {
     points_value: 10,
     scheduled_days: [] as number[],
     scheduled_time: '09:00',
+    earliest_completion_time: '',
   })
   
   const [selectedParticipants, setSelectedParticipants] = useState<string[]>([])
@@ -85,6 +86,7 @@ export function TaskCreateScreen() {
       created_by: user?.id || null,
       scheduled_days: formData.is_recurring && formData.scheduled_days.length > 0 ? formData.scheduled_days : null,
       scheduled_time: formData.is_recurring ? formData.scheduled_time : null,
+      earliest_completion_time: formData.earliest_completion_time.trim() || null,
     }
 
     createTaskMutation.mutate({
@@ -322,6 +324,33 @@ export function TaskCreateScreen() {
                   </Text>
                 </TouchableOpacity>
               ))}
+            </View>
+          </View>
+
+          {/* Earliest Completion Time */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Earliest Completion Time (Optional)</Text>
+            <Text style={styles.helpText}>
+              Set the earliest time users can mark this task as completed. Leave blank to allow completion anytime.
+            </Text>
+            <View style={styles.scheduledTimeContainer}>
+              <TextInput
+                style={styles.scheduledTimeInput}
+                value={formData.earliest_completion_time}
+                onChangeText={(text) => {
+                  // Basic time format validation
+                  const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/
+                  if (text.length <= 5) {
+                    setFormData(prev => ({ ...prev, earliest_completion_time: text }))
+                  }
+                }}
+                keyboardType="numeric"
+                maxLength={5}
+                placeholder="HH:MM (e.g., 17:00)"
+              />
+              <Text style={styles.scheduledTimeLabel}>
+                24-hour format. Users can only complete after this time on the due date.
+              </Text>
             </View>
           </View>
 

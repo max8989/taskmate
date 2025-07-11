@@ -5,6 +5,39 @@ import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacit
 import { useAuth } from '../../hooks/useAuth'
 import { useCompleteAnyTaskAssignment, useTaskAssignments, useTaskPendingAssignments, useTasks, useUserTaskAssignments } from '../../src/hooks/useTaskQuery'
 
+// Helper function to check if task completion is allowed
+function canCompleteTask(task: any, assignment: any): { allowed: boolean; message?: string; timeUntilAllowed?: string } {
+  if (!task?.earliest_completion_time) {
+    return { allowed: true }
+  }
+
+  const now = new Date()
+  const today = now.toISOString().split('T')[0]
+  const dueDate = assignment?.due_date || today
+  
+  // Only enforce earliest completion time on the due date
+  if (dueDate !== today) {
+    return { allowed: true }
+  }
+
+  // Parse earliest completion time
+  const [hours, minutes] = task.earliest_completion_time.split(':').map(Number)
+  const earliestTime = new Date()
+  earliestTime.setHours(hours, minutes, 0, 0)
+
+  if (now < earliestTime) {
+    const timeStr = task.earliest_completion_time
+    const timeUntilAllowed = earliestTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    return { 
+      allowed: false, 
+      message: `Available after ${timeStr}`,
+      timeUntilAllowed
+    }
+  }
+
+  return { allowed: true }
+}
+
 export default function TasksScreen() {
   const { t } = useTranslation()
   const router = useRouter()
@@ -157,8 +190,19 @@ function SimpleTaskCard({ assignment, task, completed = false }: {
   
   if (!displayTask) return null
 
+  const completionCheck = canCompleteTask(displayTask, assignment)
+
   const handleCompleteTask = () => {
     if (!assignment || completed) return
+    
+    if (!completionCheck.allowed) {
+      Alert.alert(
+        'Cannot Complete Yet',
+        completionCheck.message || 'Task cannot be completed at this time.',
+        [{ text: 'OK' }]
+      )
+      return
+    }
     
     Alert.alert(
       'Complete Task',
@@ -236,13 +280,30 @@ function SimpleTaskCard({ assignment, task, completed = false }: {
             Due: {formatDate(assignment.due_date)}
             {isOverdue && ' (Overdue)'}
           </Text>
+          {displayTask.earliest_completion_time && !completed && (
+            <Text style={[
+              styles.completionTimeText,
+              !completionCheck.allowed && styles.restrictedTimeText
+            ]}>
+              {completionCheck.allowed 
+                ? `Can complete after ${displayTask.earliest_completion_time}` 
+                : `Available after ${displayTask.earliest_completion_time} today`
+              }
+            </Text>
+          )}
         </View>
       )}
       
       {assignment && !completed && (
         <View style={styles.tapHintContainer}>
-          <Text style={styles.tapHint}>
-            {completeTaskMutation.isPending ? 'Completing...' : 'Tap to complete'}
+          <Text style={[
+            styles.tapHint,
+            !completionCheck.allowed && styles.restrictedTimeText
+          ]}>
+            {completeTaskMutation.isPending ? 'Completing...' : 
+             !completionCheck.allowed ? completionCheck.message :
+             'Tap to complete'
+            }
           </Text>
         </View>
       )}
@@ -257,7 +318,18 @@ function HouseholdTaskCard({ assignment }: { assignment: any }) {
   
   if (!assignment?.tasks) return null
 
+  const completionCheck = canCompleteTask(assignment.tasks, assignment)
+
   const handleCompleteTask = () => {
+    if (!completionCheck.allowed) {
+      Alert.alert(
+        'Cannot Complete Yet',
+        completionCheck.message || 'Task cannot be completed at this time.',
+        [{ text: 'OK' }]
+      )
+      return
+    }
+
     Alert.alert(
       'Complete Task',
       `Mark "${assignment.tasks.title}" as completed?\n\nThis task is assigned to ${assignment.assigned_to_profile?.display_name}, but you can complete it to help out!`,
@@ -334,11 +406,26 @@ function HouseholdTaskCard({ assignment }: { assignment: any }) {
           Due: {formatDate(assignment.due_date)}
           {isOverdue && ' (Overdue)'}
         </Text>
+        {assignment.tasks.earliest_completion_time && (
+          <Text style={[
+            styles.completionTimeText,
+            !completionCheck.allowed && styles.restrictedTimeText
+          ]}>
+            {completionCheck.allowed 
+              ? `Can complete after ${assignment.tasks.earliest_completion_time}` 
+              : `Available after ${assignment.tasks.earliest_completion_time} today`
+            }
+          </Text>
+        )}
       </View>
       
       <View style={styles.tapHintContainer}>
-        <Text style={styles.tapHint}>
+        <Text style={[
+          styles.tapHint,
+          !completionCheck.allowed && styles.restrictedTimeText
+        ]}>
           {completeTaskMutation.isPending ? 'Completing...' : 
+           !completionCheck.allowed ? completionCheck.message :
            isAssignedToCurrentUser ? 'Tap to complete your task' : 
            'Tap to help complete this task'
           }
@@ -592,6 +679,16 @@ const styles = StyleSheet.create({
   overdueText: {
     color: '#E53E3E',
     fontWeight: '600',
+  },
+  completionTimeText: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 2,
+    fontStyle: 'italic',
+  },
+  restrictedTimeText: {
+    color: '#F59E0B',
+    fontWeight: '500',
   },
   tapHintContainer: {
     marginTop: 8,

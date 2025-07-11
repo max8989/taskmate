@@ -135,6 +135,39 @@ function isCompletedEarly(dueDate: string, completedAt: Date): boolean {
   return completedAt < due
 }
 
+// Check if completion is allowed based on earliest completion time
+function isCompletionAllowed(task: any, assignment: any, currentTime: Date): { allowed: boolean; message?: string } {
+  if (!task.earliest_completion_time) {
+    return { allowed: true }
+  }
+
+  const today = new Date()
+  const currentDateStr = today.toISOString().split('T')[0]
+  
+  // Get the assignment's due date
+  const dueDate = assignment.due_date || currentDateStr
+  
+  // Only enforce earliest completion time on the due date
+  if (dueDate !== currentDateStr) {
+    return { allowed: true }
+  }
+
+  // Parse earliest completion time
+  const [hours, minutes] = task.earliest_completion_time.split(':').map(Number)
+  const earliestTime = new Date()
+  earliestTime.setHours(hours, minutes, 0, 0)
+
+  if (currentTime < earliestTime) {
+    const timeStr = task.earliest_completion_time
+    return { 
+      allowed: false, 
+      message: `This task can only be completed after ${timeStr} today.` 
+    }
+  }
+
+  return { allowed: true }
+}
+
 async function getNextAssignee(taskId: string, currentAssigneeId: string): Promise<string | null> {
   // Get all participants for this task, ordered by rotation_order
   const { data: participants, error } = await supabase
@@ -603,6 +636,12 @@ export function useCompleteTaskAssignment() {
       
       if (getError || !assignment) throw getError || new Error('Assignment not found')
       
+      // Check if completion is allowed based on earliest completion time
+      const completionCheck = isCompletionAllowed(assignment.tasks, assignment, completedAt)
+      if (!completionCheck.allowed) {
+        throw new Error(completionCheck.message || 'Completion not allowed at this time')
+      }
+      
       // Calculate points and bonuses
       const wasCompletedEarly = isCompletedEarly(assignment.due_date, completedAt)
       const basePoints = calculateTaskPoints(assignment.tasks, assignment, wasCompletedEarly)
@@ -880,6 +919,12 @@ export function useCompleteAnyTaskAssignment() {
       
       if (completedByProfile.household_id !== assignment.tasks?.household_id) {
         throw new Error('You can only complete tasks in your household')
+      }
+      
+      // Check if completion is allowed based on earliest completion time
+      const completionCheck = isCompletionAllowed(assignment.tasks, assignment, completedAt)
+      if (!completionCheck.allowed) {
+        throw new Error(completionCheck.message || 'Completion not allowed at this time')
       }
       
       // Calculate points and bonuses

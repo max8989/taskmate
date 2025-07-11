@@ -83,6 +83,7 @@ export interface Database {
           created_at: string
           scheduled_days: number[] | null
           scheduled_time: string | null
+          earliest_completion_time: string | null
         }
         Insert: {
           id?: string
@@ -98,6 +99,7 @@ export interface Database {
           created_at?: string
           scheduled_days?: number[] | null
           scheduled_time?: string | null
+          earliest_completion_time?: string | null
         }
         Update: {
           id?: string
@@ -113,6 +115,7 @@ export interface Database {
           created_at?: string
           scheduled_days?: number[] | null
           scheduled_time?: string | null
+          earliest_completion_time?: string | null
         }
       }
       task_assignments: {
