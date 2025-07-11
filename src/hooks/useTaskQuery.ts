@@ -3,6 +3,152 @@ import { useRouter } from 'expo-router'
 import { Alert } from 'react-native'
 import { supabase, TablesInsert } from '../lib/supabase'
 
+// Helper functions for task assignment and rotation
+function calculateNextDueDate(
+  frequency_type: 'daily' | 'weekly' | 'monthly',
+  frequency_value: number,
+  fromDate: Date = new Date(),
+  scheduledDays?: number[] | null,
+  scheduledTime?: string | null
+): Date {
+  const nextDate = new Date(fromDate)
+  
+  // Set time if provided (default to 9 AM if not specified)
+  if (scheduledTime) {
+    const [hours, minutes] = scheduledTime.split(':').map(Number)
+    nextDate.setHours(hours, minutes, 0, 0)
+  } else {
+    nextDate.setHours(9, 0, 0, 0) // Default to 9 AM
+  }
+  
+  switch (frequency_type) {
+    case 'daily':
+      nextDate.setDate(nextDate.getDate() + frequency_value)
+      break
+      
+    case 'weekly':
+      if (scheduledDays && scheduledDays.length > 0) {
+        // Find next occurrence of any scheduled day
+        const currentDay = nextDate.getDay()
+        const sortedDays = [...scheduledDays].sort()
+        
+        // Find next scheduled day this week
+        let nextDay = sortedDays.find(day => day > currentDay)
+        
+        if (nextDay === undefined) {
+          // No more days this week, go to first day of next week cycle
+          nextDay = sortedDays[0]
+          const daysUntilNext = (7 - currentDay) + nextDay + ((frequency_value - 1) * 7)
+          nextDate.setDate(nextDate.getDate() + daysUntilNext)
+        } else {
+          // Next day is this week
+          nextDate.setDate(nextDate.getDate() + (nextDay - currentDay))
+        }
+      } else {
+        // Fallback to simple weekly increment
+        nextDate.setDate(nextDate.getDate() + (frequency_value * 7))
+      }
+      break
+      
+    case 'monthly':
+      nextDate.setMonth(nextDate.getMonth() + frequency_value)
+      
+      // If scheduled days are provided for monthly tasks, try to match the day of week
+      if (scheduledDays && scheduledDays.length > 0) {
+        const targetDay = scheduledDays[0] // Use first scheduled day for monthly
+        const currentDay = nextDate.getDay()
+        
+        if (currentDay !== targetDay) {
+          const daysToAdd = (targetDay - currentDay + 7) % 7
+          nextDate.setDate(nextDate.getDate() + daysToAdd)
+        }
+      }
+      break
+  }
+  
+  return nextDate
+}
+
+async function getNextAssignee(taskId: string, currentAssigneeId: string): Promise<string | null> {
+  // Get all participants for this task, ordered by rotation_order
+  const { data: participants, error } = await supabase
+    .from('task_participants')
+    .select('user_id, rotation_order')
+    .eq('task_id', taskId)
+    .eq('is_active', true)
+    .order('rotation_order', { ascending: true })
+  
+  if (error || !participants || participants.length === 0) {
+    return currentAssigneeId // Fallback to current assignee
+  }
+  
+  // If only one participant, keep assigning to them
+  if (participants.length === 1) {
+    return participants[0].user_id
+  }
+  
+  // Find current assignee's position
+  const currentIndex = participants.findIndex(p => p.user_id === currentAssigneeId)
+  
+  if (currentIndex === -1) {
+    // Current assignee not in participants, assign to first participant
+    return participants[0].user_id
+  }
+  
+  // Get next participant in rotation (wrap around to beginning if at end)
+  const nextIndex = (currentIndex + 1) % participants.length
+  return participants[nextIndex].user_id
+}
+
+async function createInitialAssignmentForRecurringTask(
+  taskId: string, 
+  participants: string[],
+  task?: { scheduled_days?: number[] | null, scheduled_time?: string | null, frequency_type?: string }
+): Promise<void> {
+  if (participants.length === 0) return
+  
+  // Create initial assignment for the first participant
+  const firstAssignee = participants[0]
+  
+  // Calculate the due date/time based on scheduling preferences
+  let dueDate = new Date()
+  
+  if (task?.scheduled_time) {
+    const [hours, minutes] = task.scheduled_time.split(':').map(Number)
+    dueDate.setHours(hours, minutes, 0, 0)
+  } else {
+    dueDate.setHours(23, 59, 59, 999) // End of today if no time specified
+  }
+  
+  // If it's a weekly task with scheduled days, find the next occurrence
+  if (task?.frequency_type === 'weekly' && task?.scheduled_days && task.scheduled_days.length > 0) {
+    const currentDay = dueDate.getDay()
+    const nextDay = task.scheduled_days.find(day => day >= currentDay) || task.scheduled_days[0]
+    
+    if (nextDay === currentDay) {
+      // Today is a scheduled day, use today
+    } else if (nextDay > currentDay) {
+      // Later this week
+      dueDate.setDate(dueDate.getDate() + (nextDay - currentDay))
+    } else {
+      // Next week
+      dueDate.setDate(dueDate.getDate() + (7 - currentDay + nextDay))
+    }
+  }
+  
+  const { error } = await supabase
+    .from('task_assignments')
+    .insert({
+      task_id: taskId,
+      assigned_to: firstAssignee,
+      due_date: dueDate.toISOString().split('T')[0],
+      due_datetime: dueDate.toISOString(),
+      rotation_order: 1,
+    })
+  
+  if (error) throw error
+}
+
 // Query keys for consistency
 export const taskKeys = {
   all: ['task'] as const,
@@ -154,6 +300,31 @@ export function useTaskParticipants(taskId: string | null) {
   })
 }
 
+// Get pending assignments for a specific task
+export function useTaskPendingAssignments(taskId: string | null) {
+  return useQuery({
+    queryKey: [...taskKeys.detail(taskId!), 'pending-assignments'],
+    queryFn: async () => {
+      if (!taskId) throw new Error('No task ID provided')
+      
+      const { data: assignments, error } = await supabase
+        .from('task_assignments')
+        .select(`
+          *,
+          assigned_to_profile:profiles!assigned_to(id, display_name)
+        `)
+        .eq('task_id', taskId)
+        .eq('is_completed', false)
+        .order('due_date', { ascending: true })
+      
+      if (error) throw error
+      return assignments
+    },
+    enabled: !!taskId,
+    staleTime: 1000 * 60 * 1, // 1 minute
+  })
+}
+
 // Create task mutation
 export function useCreateTask() {
   const queryClient = useQueryClient()
@@ -192,8 +363,9 @@ export function useCreateTask() {
         if (participantsError) throw participantsError
       }
       
-      // For one-time tasks or if no participants, create initial assignment
-      if (!task.is_recurring || participants.length === 0) {
+      // Create initial assignment based on task type
+      if (!task.is_recurring) {
+        // For one-time tasks, create immediate assignment
         const assignedTo = participants.length > 0 ? participants[0] : taskData.created_by
         
         if (assignedTo) {
@@ -210,6 +382,22 @@ export function useCreateTask() {
             })
           
           if (assignmentError) throw assignmentError
+        }
+      } else {
+        // For recurring tasks, create initial assignment if there are participants
+        if (participants.length > 0) {
+          await createInitialAssignmentForRecurringTask(task.id, participants, {
+            scheduled_days: task.scheduled_days,
+            scheduled_time: task.scheduled_time,
+            frequency_type: task.frequency_type
+          })
+        } else if (taskData.created_by) {
+          // If no participants, assign to creator
+          await createInitialAssignmentForRecurringTask(task.id, [taskData.created_by], {
+            scheduled_days: task.scheduled_days,
+            scheduled_time: task.scheduled_time,
+            frequency_type: task.frequency_type
+          })
         }
       }
       
@@ -351,29 +539,36 @@ export function useCompleteTaskAssignment() {
       
       if (error) throw error
       
-      // If it's a recurring task, create next assignment
-      if (assignment.tasks?.is_recurring) {
-        // TODO: Implement rotation logic here
-        // For now, just create a simple next assignment
-        const nextDueDate = new Date()
+      // If it's a recurring task, create next assignment with proper rotation
+      if (assignment.tasks?.is_recurring && assignment.tasks.frequency_type) {
+        // Calculate next due date with scheduling preferences
+        const nextDueDate = calculateNextDueDate(
+          assignment.tasks.frequency_type,
+          assignment.tasks.frequency_value || 1,
+          new Date(assignment.due_datetime || assignment.due_date),
+          assignment.tasks.scheduled_days,
+          assignment.tasks.scheduled_time
+        )
         
-        if (assignment.tasks.frequency_type === 'daily') {
-          nextDueDate.setDate(nextDueDate.getDate() + (assignment.tasks.frequency_value || 1))
-        } else if (assignment.tasks.frequency_type === 'weekly') {
-          nextDueDate.setDate(nextDueDate.getDate() + (assignment.tasks.frequency_value || 1) * 7)
-        } else if (assignment.tasks.frequency_type === 'monthly') {
-          nextDueDate.setMonth(nextDueDate.getMonth() + (assignment.tasks.frequency_value || 1))
+        // Get next assignee in rotation
+        const nextAssignee = await getNextAssignee(assignment.task_id, assignment.assigned_to)
+        
+        if (nextAssignee) {
+          const { error: nextAssignmentError } = await supabase
+            .from('task_assignments')
+            .insert({
+              task_id: assignment.task_id,
+              assigned_to: nextAssignee,
+              due_date: nextDueDate.toISOString().split('T')[0],
+              due_datetime: nextDueDate.toISOString(),
+              rotation_order: (assignment.rotation_order || 0) + 1,
+            })
+          
+          if (nextAssignmentError) {
+            console.error('Error creating next assignment:', nextAssignmentError)
+            // Don't throw error here as the main task completion was successful
+          }
         }
-        
-        // Create next assignment (simplified - will be enhanced with rotation)
-        await supabase
-          .from('task_assignments')
-          .insert({
-            task_id: assignment.task_id,
-            assigned_to: assignment.assigned_to, // Will be rotated later
-            due_date: nextDueDate.toISOString().split('T')[0],
-            rotation_order: (assignment.rotation_order || 0) + 1,
-          })
       }
       
       return assignment
@@ -426,6 +621,31 @@ export function useUpdateTaskParticipants() {
           .insert(participantInserts)
         
         if (error) throw error
+        
+        // For recurring tasks, check if we need to create an initial assignment
+        const { data: task, error: taskError } = await supabase
+          .from('tasks')
+          .select('is_recurring, household_id, scheduled_days, scheduled_time, frequency_type')
+          .eq('id', taskId)
+          .single()
+        
+        if (!taskError && task?.is_recurring) {
+          // Check if there are any pending assignments
+          const { data: pendingAssignments, error: assignmentError } = await supabase
+            .from('task_assignments')
+            .select('id')
+            .eq('task_id', taskId)
+            .eq('is_completed', false)
+          
+          // If no pending assignments, create initial assignment
+          if (!assignmentError && (!pendingAssignments || pendingAssignments.length === 0)) {
+            await createInitialAssignmentForRecurringTask(taskId, participants, {
+              scheduled_days: task.scheduled_days,
+              scheduled_time: task.scheduled_time,
+              frequency_type: task.frequency_type
+            })
+          }
+        }
       }
       
       return participants
@@ -434,10 +654,54 @@ export function useUpdateTaskParticipants() {
       // Invalidate participants cache
       queryClient.invalidateQueries({ queryKey: taskKeys.participants(variables.taskId) })
       
+      // Invalidate assignments cache to show new assignments
+      queryClient.invalidateQueries({ queryKey: taskKeys.all })
+      
       Alert.alert('Success', 'Task participants updated')
     },
     onError: (error: any) => {
       Alert.alert('Error', error.message || 'Failed to update participants')
+    },
+  })
+}
+
+// Reassign a specific task assignment (for admin use)
+export function useReassignTaskAssignment() {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: async ({ 
+      assignmentId, 
+      newAssigneeId 
+    }: { 
+      assignmentId: string
+      newAssigneeId: string
+    }) => {
+      const { data: assignment, error } = await supabase
+        .from('task_assignments')
+        .update({
+          assigned_to: newAssigneeId,
+        })
+        .eq('id', assignmentId)
+        .eq('is_completed', false) // Only allow reassigning incomplete tasks
+        .select(`
+          *,
+          tasks(household_id)
+        `)
+        .single()
+      
+      if (error) throw error
+      return assignment
+    },
+    onSuccess: (assignment) => {
+      // Invalidate relevant queries
+      queryClient.invalidateQueries({ queryKey: taskKeys.assignments(assignment.tasks?.household_id!) })
+      queryClient.invalidateQueries({ queryKey: taskKeys.userAssignments(assignment.assigned_to) })
+      
+      Alert.alert('Success', 'Task reassigned successfully')
+    },
+    onError: (error: any) => {
+      Alert.alert('Error', error.message || 'Failed to reassign task')
     },
   })
 }

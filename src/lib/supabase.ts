@@ -81,6 +81,8 @@ export interface Database {
           points_value: number
           created_by: string | null
           created_at: string
+          scheduled_days: number[] | null
+          scheduled_time: string | null
         }
         Insert: {
           id?: string
@@ -94,6 +96,8 @@ export interface Database {
           points_value?: number
           created_by?: string | null
           created_at?: string
+          scheduled_days?: number[] | null
+          scheduled_time?: string | null
         }
         Update: {
           id?: string
@@ -107,6 +111,8 @@ export interface Database {
           points_value?: number
           created_by?: string | null
           created_at?: string
+          scheduled_days?: number[] | null
+          scheduled_time?: string | null
         }
       }
       task_assignments: {
@@ -115,6 +121,7 @@ export interface Database {
           task_id: string
           assigned_to: string
           due_date: string
+          due_datetime: string | null
           is_completed: boolean
           completed_at: string | null
           completed_by: string | null
@@ -126,6 +133,7 @@ export interface Database {
           task_id: string
           assigned_to: string
           due_date: string
+          due_datetime?: string | null
           is_completed?: boolean
           completed_at?: string | null
           completed_by?: string | null
@@ -137,6 +145,7 @@ export interface Database {
           task_id?: string
           assigned_to?: string
           due_date?: string
+          due_datetime?: string | null
           is_completed?: boolean
           completed_at?: string | null
           completed_by?: string | null

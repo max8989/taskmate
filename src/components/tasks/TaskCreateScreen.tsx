@@ -26,6 +26,16 @@ const FREQUENCY_TYPES = [
   { value: 'monthly', label: 'Monthly' }
 ]
 
+const DAYS_OF_WEEK = [
+  { value: 0, label: 'Sunday', short: 'Sun' },
+  { value: 1, label: 'Monday', short: 'Mon' },
+  { value: 2, label: 'Tuesday', short: 'Tue' },
+  { value: 3, label: 'Wednesday', short: 'Wed' },
+  { value: 4, label: 'Thursday', short: 'Thu' },
+  { value: 5, label: 'Friday', short: 'Fri' },
+  { value: 6, label: 'Saturday', short: 'Sat' },
+]
+
 export function TaskCreateScreen() {
   const { t } = useTranslation()
   const router = useRouter()
@@ -40,6 +50,8 @@ export function TaskCreateScreen() {
     frequency_type: 'weekly' as 'daily' | 'weekly' | 'monthly',
     frequency_value: 1,
     points_value: 10,
+    scheduled_days: [] as number[],
+    scheduled_time: '09:00',
   })
   
   const [selectedParticipants, setSelectedParticipants] = useState<string[]>([])
@@ -71,6 +83,8 @@ export function TaskCreateScreen() {
       frequency_value: formData.is_recurring ? formData.frequency_value : 1,
       points_value: formData.points_value,
       created_by: user?.id || null,
+      scheduled_days: formData.is_recurring && formData.scheduled_days.length > 0 ? formData.scheduled_days : null,
+      scheduled_time: formData.is_recurring ? formData.scheduled_time : null,
     }
 
     createTaskMutation.mutate({
@@ -85,6 +99,15 @@ export function TaskCreateScreen() {
         ? prev.filter(id => id !== userId)
         : [...prev, userId]
     )
+  }
+
+  const toggleDay = (dayValue: number) => {
+    setFormData(prev => ({
+      ...prev,
+      scheduled_days: prev.scheduled_days.includes(dayValue)
+        ? prev.scheduled_days.filter(d => d !== dayValue)
+        : [...prev.scheduled_days, dayValue].sort()
+    }))
   }
 
   const isLoading = createTaskMutation.isPending
@@ -220,6 +243,61 @@ export function TaskCreateScreen() {
                   </Text>
                 </View>
               </View>
+
+              {/* Scheduled Days (only for recurring tasks) */}
+              {formData.frequency_type === 'weekly' && (
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Scheduled Days</Text>
+                  <View style={styles.scheduledDaysContainer}>
+                    {DAYS_OF_WEEK.map((day) => (
+                      <TouchableOpacity
+                        key={day.value}
+                        style={[
+                          styles.scheduledDayButton,
+                          formData.scheduled_days.includes(day.value) && styles.scheduledDayButtonActive
+                        ]}
+                        onPress={() => toggleDay(day.value)}
+                      >
+                        <Text style={[
+                          styles.scheduledDayButtonText,
+                          formData.scheduled_days.includes(day.value) && styles.scheduledDayButtonTextActive
+                        ]}>
+                          {day.short}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+                             {/* Scheduled Time (for all recurring tasks) */}
+               <View style={styles.inputGroup}>
+                 <Text style={styles.label}>Scheduled Time</Text>
+                 <Text style={styles.helpText}>
+                   {formData.frequency_type === 'daily' ? 'Daily at this time' :
+                    formData.frequency_type === 'weekly' ? 'Weekly on selected days at this time' :
+                    'Monthly at this time'}
+                 </Text>
+                 <View style={styles.scheduledTimeContainer}>
+                   <TextInput
+                     style={styles.scheduledTimeInput}
+                     value={formData.scheduled_time}
+                     onChangeText={(text) => {
+                       // Basic time format validation
+                       const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/
+                       if (text.length <= 5) {
+                         setFormData(prev => ({ ...prev, scheduled_time: text }))
+                       }
+                     }}
+                     keyboardType="numeric"
+                     maxLength={5}
+                     placeholder="HH:MM"
+                   />
+                   <Text style={styles.scheduledTimeLabel}>
+                     24-hour format (e.g., 09:00, 14:30)
+                   </Text>
+                 </View>
+               </View>
             </>
           )}
 
@@ -537,5 +615,50 @@ const styles = StyleSheet.create({
   },
   disabledButton: {
     opacity: 0.6,
+  },
+  scheduledDaysContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 8,
+  },
+  scheduledDayButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  scheduledDayButtonActive: {
+    backgroundColor: '#FF6B4D',
+    borderColor: '#FF6B4D',
+  },
+  scheduledDayButtonText: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  scheduledDayButtonTextActive: {
+    color: '#FFFFFF',
+  },
+  scheduledTimeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  scheduledTimeInput: {
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    backgroundColor: '#FFFFFF',
+    width: 80,
+    textAlign: 'center',
+  },
+  scheduledTimeLabel: {
+    fontSize: 16,
+    color: '#6B7280',
   },
 })
