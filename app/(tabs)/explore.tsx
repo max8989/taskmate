@@ -3,7 +3,7 @@ import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { useAuth } from '../../hooks/useAuth'
-import { useCompleteAnyTaskAssignment, useTaskAssignments, useTaskPendingAssignments, useTasks, useUserTaskAssignments } from '../../src/hooks/useTaskQuery'
+import { useCompleteAnyTaskAssignment, useTaskAssignments, useTaskPendingAssignments, useTasks, useUncompleteTaskAssignment, useUserTaskAssignments } from '../../src/hooks/useTaskQuery'
 
 // Helper function to check if task completion is allowed
 function canCompleteTask(task: any, assignment: any): { allowed: boolean; message?: string; timeUntilAllowed?: string } {
@@ -187,6 +187,7 @@ function SimpleTaskCard({ assignment, task, completed = false }: {
   const { user } = useAuth()
   const router = useRouter()
   const completeTaskMutation = useCompleteAnyTaskAssignment()
+  const uncompleteTaskMutation = useUncompleteTaskAssignment()
   const displayTask = assignment?.tasks || task
   
   if (!displayTask) return null
@@ -223,6 +224,27 @@ function SimpleTaskCard({ assignment, task, completed = false }: {
     )
   }
 
+  const handleUncompleteTask = () => {
+    if (!assignment || !completed) return
+
+    Alert.alert(
+      'Uncomplete Task',
+      `Mark "${displayTask.title}" as uncompleted?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Uncomplete', 
+          onPress: () => {
+            uncompleteTaskMutation.mutate({
+              assignmentId: assignment.id,
+              uncompletedBy: user?.id!,
+            })
+          }
+        }
+      ]
+    )
+  }
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
     const today = new Date()
@@ -243,6 +265,8 @@ function SimpleTaskCard({ assignment, task, completed = false }: {
   const handleCardPress = () => {
     if (assignment && !completed && completionCheck.allowed) {
       handleCompleteTask()
+    } else if (assignment && completed && uncompleteTaskMutation.isIdle) {
+      handleUncompleteTask()
     } else if (displayTask?.id) {
       // Navigate to task detail screen
       router.push(`/tasks/${displayTask.id}`)
@@ -258,7 +282,7 @@ function SimpleTaskCard({ assignment, task, completed = false }: {
       ]}
       onPress={handleCardPress}
       onLongPress={() => displayTask?.id && router.push(`/tasks/${displayTask.id}`)}
-      disabled={completeTaskMutation.isPending}
+      disabled={completeTaskMutation.isPending || uncompleteTaskMutation.isPending}
     >
       <View style={styles.taskHeader}>
         <View style={styles.taskTitleContainer}>
@@ -305,13 +329,15 @@ function SimpleTaskCard({ assignment, task, completed = false }: {
         </View>
       )}
       
-      {assignment && !completed && (
+      {assignment && (
         <View style={styles.tapHintContainer}>
           <Text style={[
             styles.tapHint,
             !completionCheck.allowed && styles.restrictedTimeText
           ]}>
             {completeTaskMutation.isPending ? 'Completing...' : 
+             uncompleteTaskMutation.isPending ? 'Uncompleting...' :
+             completed ? 'Tap to uncomplete' :
              !completionCheck.allowed ? 'Tap for details • ' + completionCheck.message :
              'Tap to complete • Long press for details'
             }

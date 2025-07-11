@@ -772,6 +772,145 @@ export function useCompleteTaskAssignment() {
   })
 }
 
+// Uncomplete task assignment mutation - reverses completion
+export function useUncompleteTaskAssignment() {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: async ({ 
+      assignmentId, 
+      uncompletedBy 
+    }: { 
+      assignmentId: string
+      uncompletedBy: string
+    }) => {
+      // First, get the assignment and task details
+      const { data: assignment, error: getError } = await supabase
+        .from('task_assignments')
+        .select(`
+          *,
+          tasks(*),
+          assigned_to_profile:profiles!assigned_to(id, display_name),
+          completed_by_profile:profiles!completed_by(id, display_name)
+        `)
+        .eq('id', assignmentId)
+        .single()
+      
+      if (getError || !assignment) throw getError || new Error('Assignment not found')
+      
+      if (!assignment.is_completed) {
+        throw new Error('This task is not completed')
+      }
+      
+      // Only allow uncompleting if the person uncompleting is the one who completed it or an admin
+      const { data: uncompleterProfile, error: profileError } = await supabase
+        .from('profiles')
+        .select('household_id, role')
+        .eq('id', uncompletedBy)
+        .single()
+        
+      if (profileError || !uncompleterProfile) {
+        throw new Error('User profile not found')
+      }
+      
+      if (uncompleterProfile.household_id !== assignment.tasks?.household_id) {
+        throw new Error('You can only uncomplete tasks in your household')
+      }
+      
+      const canUncomplete = assignment.completed_by === uncompletedBy || uncompleterProfile.role === 'admin'
+      if (!canUncomplete) {
+        throw new Error('You can only uncomplete tasks that you completed, or if you are an admin')
+      }
+      
+      // Calculate the points that were originally earned (we need to subtract them)
+      const wasCompletedEarly = assignment.completed_at ? isCompletedEarly(assignment.due_date, new Date(assignment.completed_at)) : false
+      const basePoints = calculateTaskPoints(assignment.tasks, assignment, wasCompletedEarly)
+      
+      // Calculate what the streak bonus was (this is tricky since streaks change over time)
+      // We'll make a simple assumption: if they have a current streak > 1, reduce it by 1
+      // and subtract the corresponding points
+      const { data: currentProfile, error: getCurrentProfileError } = await supabase
+        .from('profiles')
+        .select('total_points, current_streak')
+        .eq('id', assignment.completed_by!)
+        .single()
+        
+      if (getCurrentProfileError || !currentProfile) {
+        throw new Error('Could not find user profile for points reversal')
+      }
+      
+      // Estimate the streak bonus that was originally applied
+      // This is an approximation since we don't store the exact bonus that was applied
+      const originalStreak = Math.max(1, currentProfile.current_streak)
+      const estimatedStreakBonus = originalStreak * 5
+      const totalPointsToSubtract = basePoints + estimatedStreakBonus
+      
+      // Mark assignment as uncompleted
+      const { data: updatedAssignment, error: updateError } = await supabase
+        .from('task_assignments')
+        .update({
+          is_completed: false,
+          completed_at: null,
+          completed_by: null,
+        })
+        .eq('id', assignmentId)
+        .select(`
+          *,
+          tasks(*),
+          assigned_to_profile:profiles!assigned_to(id, display_name)
+        `)
+        .single()
+      
+      if (updateError) throw updateError
+      
+      // Subtract points and reduce streak
+      const newTotalPoints = Math.max(0, currentProfile.total_points - totalPointsToSubtract)
+      const newStreak = Math.max(0, currentProfile.current_streak - 1)
+      
+      const { error: profileUpdateError } = await supabase
+        .from('profiles')
+        .update({
+          total_points: newTotalPoints,
+          current_streak: newStreak,
+        })
+        .eq('id', assignment.completed_by!)
+        
+      if (profileUpdateError) {
+        console.error('Error updating user profile:', profileUpdateError)
+        // Don't throw error here as the main task uncompletion was successful
+      }
+      
+      return {
+        assignment: updatedAssignment,
+        pointsSubtracted: totalPointsToSubtract,
+        newStreak,
+        wasCompletedEarly
+      }
+    },
+    onSuccess: (result) => {
+      const { assignment, pointsSubtracted, newStreak, wasCompletedEarly } = result
+      
+      // Invalidate relevant queries
+      queryClient.invalidateQueries({ queryKey: taskKeys.assignments(assignment.tasks?.household_id!) })
+      queryClient.invalidateQueries({ queryKey: taskKeys.userAssignments(assignment.assigned_to) })
+      
+      // Invalidate profile data to update points and streak
+      queryClient.invalidateQueries({ queryKey: ['auth', 'profile'] })
+      
+      // Show success message
+      let message = `Task "${assignment.tasks?.title}" has been marked as not completed.\n\n`
+      message += `📉 -${pointsSubtracted} points removed\n`
+      message += `🔥 Streak reduced to ${newStreak} days`
+      
+      Alert.alert('Task Uncompleted', message)
+    },
+    onError: (error: any) => {
+      console.error('Error uncompleting task:', error)
+      Alert.alert('Error', error.message || 'Failed to uncomplete task')
+    },
+  })
+}
+
 // Add/update task participants
 export function useUpdateTaskParticipants() {
   const queryClient = useQueryClient()
