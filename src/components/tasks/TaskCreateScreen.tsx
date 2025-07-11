@@ -228,42 +228,40 @@ export function TaskCreateScreen() {
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.title}>{t('tasks.create')}</Text>
-          <Text style={styles.subtitle}>Create a new task for your household</Text>
+          <Text style={styles.subtitle}>{t('taskCreate.createSubtitle')}</Text>
         </View>
 
         {/* Task Details Form */}
         <View style={styles.formContainer}>
           {/* Task Title */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Task Title *</Text>
+            <Text style={styles.label}>{t('taskCreate.title')}</Text>
             <TextInput
               style={styles.input}
-              placeholder="e.g., Take out trash, Clean bathroom"
+              placeholder={t('taskCreate.titlePlaceholder')}
               value={formData.title}
               onChangeText={(text) => setFormData(prev => ({ ...prev, title: text }))}
-              maxLength={100}
             />
           </View>
 
           {/* Task Description */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Description (Optional)</Text>
+            <Text style={styles.label}>{t('taskCreate.descriptionOptional')}</Text>
             <TextInput
               style={[styles.input, styles.textArea]}
-              placeholder="Add any details or instructions..."
+              placeholder={t('taskCreate.descriptionPlaceholder')}
               value={formData.description}
               onChangeText={(text) => setFormData(prev => ({ ...prev, description: text }))}
               multiline
               numberOfLines={3}
-              maxLength={500}
             />
           </View>
 
-          {/* Task Category */}
+          {/* Category Selection */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Category</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryContainer}>
-              {TASK_CATEGORIES.map((category) => (
+            <Text style={styles.label}>{t('taskCreate.category')}</Text>
+            <View style={styles.categoryContainer}>
+              {['general', 'cleaning', 'kitchen', 'bathroom', 'laundry'].map((category) => (
                 <TouchableOpacity
                   key={category}
                   style={[
@@ -276,140 +274,118 @@ export function TaskCreateScreen() {
                     styles.categoryButtonText,
                     formData.category === category && styles.categoryButtonTextActive
                   ]}>
-                    {t(`categories.${category}`) || category}
+                    {t(`categories.${category}`)}
                   </Text>
                 </TouchableOpacity>
               ))}
-            </ScrollView>
-          </View>
-
-          {/* Recurring Toggle */}
-          <View style={styles.inputGroup}>
-            <View style={styles.switchContainer}>
-              <Text style={styles.label}>Recurring Task</Text>
-              <Switch
-                value={formData.is_recurring}
-                onValueChange={(value) => setFormData(prev => ({ ...prev, is_recurring: value }))}
-                trackColor={{ false: '#E2E8F0', true: '#FF6B4D' }}
-                thumbColor={formData.is_recurring ? '#FFFFFF' : '#9CA3AF'}
-              />
             </View>
-            <Text style={styles.helpText}>
-              {formData.is_recurring 
-                ? 'This task will repeat automatically' 
-                : 'This task will only need to be done once'
-              }
-            </Text>
           </View>
 
-          {/* Frequency Settings (only for recurring tasks) */}
+          {/* Recurring Task Toggle */}
+          <View style={styles.inputGroup}>
+            <View style={styles.toggleContainer}>
+              <View style={styles.toggleLabel}>
+                <Text style={styles.label}>{t('taskCreate.recurringTask')}</Text>
+                <Text style={styles.helpText}>{t('taskCreate.recurringDesc')}</Text>
+              </View>
+              <TouchableOpacity
+                style={[
+                  styles.toggle,
+                  formData.is_recurring && styles.toggleActive
+                ]}
+                onPress={() => setFormData(prev => ({ 
+                  ...prev, 
+                  is_recurring: !prev.is_recurring 
+                }))}
+              >
+                <View style={[
+                  styles.toggleCircle,
+                  formData.is_recurring && styles.toggleCircleActive
+                ]} />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Frequency Selection (only for recurring tasks) */}
           {formData.is_recurring && (
-            <>
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Frequency</Text>
-                <View style={styles.frequencyContainer}>
-                  {FREQUENCY_TYPES.map((freq) => (
-                    <TouchableOpacity
-                      key={freq.value}
-                      style={[
-                        styles.frequencyButton,
-                        formData.frequency_type === freq.value && styles.frequencyButtonActive
-                      ]}
-                      onPress={() => setFormData(prev => ({ ...prev, frequency_type: freq.value as any }))}
-                    >
-                      <Text style={[
-                        styles.frequencyButtonText,
-                        formData.frequency_type === freq.value && styles.frequencyButtonTextActive
-                      ]}>
-                        {freq.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Repeat Every</Text>
-                <View style={styles.repeatContainer}>
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>{t('taskCreate.frequency')}</Text>
+              <View style={styles.frequencyContainer}>
+                {['daily', 'weekly', 'monthly'].map((freq) => (
                   <TouchableOpacity
-                    style={styles.repeatButton}
-                    onPress={() => setFormData(prev => ({ 
-                      ...prev, 
-                      frequency_value: Math.max(1, prev.frequency_value - 1) 
-                    }))}
+                    key={freq}
+                    style={[
+                      styles.frequencyButton,
+                      formData.frequency_type === freq && styles.frequencyButtonActive
+                    ]}
+                    onPress={() => setFormData(prev => ({ ...prev, frequency_type: freq as any }))}
                   >
-                    <Text style={styles.repeatButtonText}>-</Text>
+                    <Text style={[
+                      styles.frequencyButtonText,
+                      formData.frequency_type === freq && styles.frequencyButtonTextActive
+                    ]}>
+                      {t(`frequency.${freq}`)}
+                    </Text>
                   </TouchableOpacity>
-                  <View style={styles.repeatValueContainer}>
-                    <Text style={styles.repeatValue}>{formData.frequency_value}</Text>
-                  </View>
-                  <TouchableOpacity
-                    style={styles.repeatButton}
-                    onPress={() => setFormData(prev => ({ 
-                      ...prev, 
-                      frequency_value: Math.min(99, prev.frequency_value + 1) 
-                    }))}
-                  >
-                    <Text style={styles.repeatButtonText}>+</Text>
-                  </TouchableOpacity>
-                  <Text style={styles.repeatLabel}>
-                    {formData.frequency_type === 'daily' ? 'day(s)' :
-                     formData.frequency_type === 'weekly' ? 'week(s)' : 
-                     'month(s)'}
-                  </Text>
-                </View>
+                ))}
               </View>
+            </View>
+          )}
 
-              {/* Scheduled Days (only for recurring tasks) */}
-              {formData.frequency_type === 'weekly' && (
-                <View style={styles.inputGroup}>
-                  <Text style={styles.label}>Scheduled Days</Text>
-                  <View style={styles.scheduledDaysContainer}>
-                    {DAYS_OF_WEEK.map((day) => (
-                      <TouchableOpacity
-                        key={day.value}
-                        style={[
-                          styles.scheduledDayButton,
-                          formData.scheduled_days.includes(day.value) && styles.scheduledDayButtonActive
-                        ]}
-                        onPress={() => toggleDay(day.value)}
-                      >
-                        <Text style={[
-                          styles.scheduledDayButtonText,
-                          formData.scheduled_days.includes(day.value) && styles.scheduledDayButtonTextActive
-                        ]}>
-                          {day.short}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
-              )}
-
-              {/* Scheduled Time (for all recurring tasks) */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Scheduled Time</Text>
-                <Text style={styles.helpText}>
-                  {formData.frequency_type === 'daily' ? 'Daily at this time' :
-                   formData.frequency_type === 'weekly' ? 'Weekly on selected days at this time' :
-                   'Monthly at this time'}
-                </Text>
+          {/* Repeat Every (only for recurring tasks) */}
+          {formData.is_recurring && (
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>{t('taskCreate.repeatEvery')}</Text>
+              <View style={styles.repeatContainer}>
                 <TouchableOpacity 
-                  style={styles.timeButton}
-                  onPress={() => setTimePickerVisible(true)}
+                  style={styles.repeatButton}
+                  onPress={() => setFormData(prev => ({ 
+                    ...prev, 
+                    frequency_value: Math.max(1, prev.frequency_value - 1) 
+                  }))}
                 >
-                  <Text style={styles.timeButtonText}>
-                    {formData.scheduled_time || 'Select Time'}
-                  </Text>
-                  <Text style={styles.timeButtonLabel}>24-hour format</Text>
+                  <Text style={styles.repeatButtonText}>-</Text>
                 </TouchableOpacity>
+                
+                <Text style={styles.repeatValue}>{formData.frequency_value}</Text>
+                
+                <TouchableOpacity 
+                  style={styles.repeatButton}
+                  onPress={() => setFormData(prev => ({ 
+                    ...prev, 
+                    frequency_value: prev.frequency_value + 1 
+                  }))}
+                >
+                  <Text style={styles.repeatButtonText}>+</Text>
+                </TouchableOpacity>
+                
+                <Text style={styles.repeatUnit}>
+                  {t(`taskCreate.${formData.frequency_type === 'daily' ? 'days' : 
+                      formData.frequency_type === 'weekly' ? 'weeks' : 'months'}`)}
+                </Text>
               </View>
-            </>
+            </View>
+          )}
+
+          {/* Scheduled Time */}
+          {formData.is_recurring && (
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>{t('taskCreate.scheduledTime')}</Text>
+              <Text style={styles.helpText}>{t('taskCreate.weeklyOnDays')}</Text>
+              
+              <TouchableOpacity
+                style={styles.timePickerButton}
+                onPress={() => setTimePickerVisible(true)}
+              >
+                <Text style={styles.timePickerText}>{formData.scheduled_time}</Text>
+                <Text style={styles.timePickerLabel}>{t('time.format24h')}</Text>
+              </TouchableOpacity>
+            </View>
           )}
 
           {/* Points Value */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Points Value</Text>
+            <Text style={styles.label}>{t('taskCreate.pointsValue')}</Text>
             <View style={styles.pointsContainer}>
               {[5, 10, 15, 20, 25].map((points) => (
                 <TouchableOpacity
@@ -433,19 +409,20 @@ export function TaskCreateScreen() {
 
           {/* Earliest Completion Time */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Earliest Completion Time (Optional)</Text>
+            <Text style={styles.label}>{t('taskCreate.earliestCompletion')}</Text>
             <Text style={styles.helpText}>
-              Set the earliest time users can mark this task as completed. Leave blank to allow completion anytime.
+              {t('taskCreate.earliestCompletionDesc')}
             </Text>
-            <TouchableOpacity 
+            
+            <TouchableOpacity
               style={styles.timeButton}
               onPress={() => setEarliestTimePickerVisible(true)}
             >
               <Text style={styles.timeButtonText}>
-                {formData.earliest_completion_time || 'Select Time (Optional)'}
+                {formData.earliest_completion_time || t('taskCreate.selectTimeOptional')}
               </Text>
               <Text style={styles.timeButtonLabel}>
-                Users can only complete after this time on due date
+                {t('taskCreate.selectTimeDesc')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -453,7 +430,7 @@ export function TaskCreateScreen() {
           {/* Notify on Incomplete Toggle */}
           <View style={styles.inputGroup}>
             <View style={styles.switchContainer}>
-              <Text style={styles.label}>Notify on Incomplete</Text>
+              <Text style={styles.label}>{t('taskCreate.notifyIncomplete')}</Text>
               <Switch
                 value={formData.notify_on_incomplete}
                 onValueChange={(value) => setFormData(prev => ({ ...prev, notify_on_incomplete: value }))}
@@ -462,21 +439,19 @@ export function TaskCreateScreen() {
               />
             </View>
             <Text style={styles.helpText}>
-              {formData.notify_on_incomplete 
-                ? 'Users will receive a notification if they do not complete this task by its scheduled time.' 
-                : 'Users will not receive notifications for incomplete tasks.'
-              }
+              {t('taskCreate.notifyIncompleteDesc')}
             </Text>
           </View>
 
           {/* Participants Selection */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>
-              Participants {selectedParticipants.length > 0 && `(${selectedParticipants.length} selected)`}
+              {t('taskCreate.participants')} {selectedParticipants.length > 0 && `(${selectedParticipants.length} selected)`}
             </Text>
             <Text style={styles.helpText}>
-              Select who can be assigned this task. If none selected, only you will be assigned.
+              {t('taskCreate.participantsDesc')}
             </Text>
+            
             <View style={styles.participantsContainer}>
               {householdMembers?.map((member) => (
                 <TouchableOpacity
@@ -491,8 +466,8 @@ export function TaskCreateScreen() {
                     styles.participantButtonText,
                     selectedParticipants.includes(member.id) && styles.participantButtonTextActive
                   ]}>
-                    {member.display_name}
-                    {member.id === user?.id && ' (You)'}
+                                      {member.display_name}
+                  {member.id === user?.id && ` (${t('taskCreate.you')})`}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -500,7 +475,7 @@ export function TaskCreateScreen() {
           </View>
         </View>
 
-        {/* Action Buttons */}
+        {/* Submit Buttons */}
         <View style={styles.buttonContainer}>
           <TouchableOpacity
             style={[styles.createButton, isLoading && styles.disabledButton]}
@@ -508,16 +483,15 @@ export function TaskCreateScreen() {
             disabled={isLoading}
           >
             <Text style={styles.createButtonText}>
-              {isLoading ? 'Creating...' : 'Create Task'}
+              {isLoading ? t('common.loading') : t('taskCreate.createTask')}
             </Text>
           </TouchableOpacity>
-
+          
           <TouchableOpacity
             style={styles.cancelButton}
             onPress={() => router.back()}
-            disabled={isLoading}
           >
-            <Text style={styles.cancelButtonText}>Cancel</Text>
+            <Text style={styles.cancelButtonText}>{t('taskCreate.cancel')}</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -677,8 +651,8 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   repeatButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    width: 40,
+    height: 40,
     borderRadius: 8,
     backgroundColor: '#F3F4F6',
     borderWidth: 1,
@@ -687,9 +661,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   repeatButtonText: {
-    fontSize: 20,
-    color: '#6B7280',
-    fontWeight: 'bold',
+    fontSize: 18,
+    color: '#374151',
+    fontWeight: '600',
   },
   repeatValueContainer: {
     paddingVertical: 8,
@@ -701,11 +675,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   repeatValue: {
-    fontSize: 16,
+    fontSize: 18,
     color: '#374151',
     fontWeight: '600',
+    minWidth: 30,
+    textAlign: 'center',
   },
   repeatLabel: {
+    fontSize: 16,
+    color: '#6B7280',
+  },
+  repeatUnit: {
     fontSize: 16,
     color: '#6B7280',
   },
@@ -948,4 +928,112 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '600',
   },
+  // New styles for the updated form
+  section: {
+    marginBottom: 20,
+  },
+  description: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  toggleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
+  },
+  toggleLabel: {
+    flex: 1,
+  },
+  toggle: {
+    width: 50,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#E2E8F0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 2,
+  },
+  toggleActive: {
+    backgroundColor: '#FF6B4D',
+  },
+  toggleCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+  },
+  toggleCircleActive: {
+    left: 26, // Adjust for active position
+  },
+  daysContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  dayButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  dayButtonActive: {
+    backgroundColor: '#FF6B4D',
+    borderColor: '#FF6B4D',
+  },
+  dayButtonText: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  dayButtonTextActive: {
+    color: '#FFFFFF',
+  },
+  pointButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    minWidth: 45,
+    alignItems: 'center',
+  },
+  pointButtonActive: {
+    backgroundColor: '#FF6B4D',
+    borderColor: '#FF6B4D',
+  },
+  pointButtonText: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  pointButtonTextActive: {
+    color: '#FFFFFF',
+  },
+  timePickerButton: {
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 8,
+    padding: 12,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+  },
+  timePickerText: {
+    fontSize: 16,
+    color: '#374151',
+    fontWeight: '500',
+  },
+  timePickerLabel: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 2,
+    textAlign: 'center',
+    flexWrap: 'wrap',
+  },
+  
 })

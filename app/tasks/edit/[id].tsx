@@ -521,19 +521,20 @@ export default function TaskEditScreen() {
 
             {/* Earliest Completion Time */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Earliest Completion Time (Optional)</Text>
+              <Text style={styles.label}>{t('taskCreate.earliestCompletion')}</Text>
               <Text style={styles.helpText}>
-                Set the earliest time users can mark this task as completed. Leave blank to allow completion anytime.
+                {t('taskCreate.earliestCompletionDesc')}
               </Text>
-              <TouchableOpacity 
+              
+              <TouchableOpacity
                 style={styles.timeButton}
                 onPress={() => setEarliestTimePickerVisible(true)}
               >
                 <Text style={styles.timeButtonText}>
-                  {formData.earliest_completion_time || 'Select Time (Optional)'}
+                  {formData.earliest_completion_time || t('taskCreate.selectTimeOptional')}
                 </Text>
                 <Text style={styles.timeButtonLabel}>
-                  Users can only complete after this time on due date
+                  {t('taskCreate.selectTimeDesc')}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -541,7 +542,7 @@ export default function TaskEditScreen() {
             {/* Notify on Incomplete Toggle */}
             <View style={styles.inputGroup}>
               <View style={styles.switchContainer}>
-                <Text style={styles.label}>Notify on Incomplete</Text>
+                <Text style={styles.label}>{t('taskCreate.notifyIncomplete')}</Text>
                 <Switch
                   value={formData.notify_on_incomplete}
                   onValueChange={(value) => setFormData(prev => ({ ...prev, notify_on_incomplete: value }))}
@@ -550,21 +551,19 @@ export default function TaskEditScreen() {
                 />
               </View>
               <Text style={styles.helpText}>
-                {formData.notify_on_incomplete 
-                  ? 'Notify participants when this task is not completed by its due date' 
-                  : 'Do not notify participants when this task is not completed by its due date'
-                }
+                {t('taskCreate.notifyIncompleteDesc')}
               </Text>
             </View>
 
             {/* Participants Selection */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>
-                Participants {selectedParticipants.length > 0 && `(${selectedParticipants.length} selected)`}
+                {t('taskCreate.participants')} {selectedParticipants.length > 0 && `(${selectedParticipants.length} selected)`}
               </Text>
               <Text style={styles.helpText}>
-                Select who can be assigned this task. If none selected, only the creator will be assigned.
+                {t('taskCreate.participantsDesc')}
               </Text>
+              
               <View style={styles.participantsContainer}>
                 {householdMembers?.map((member) => (
                   <TouchableOpacity
@@ -580,7 +579,7 @@ export default function TaskEditScreen() {
                       selectedParticipants.includes(member.id) && styles.participantButtonTextActive
                     ]}>
                       {member.display_name}
-                      {member.id === user?.id && ' (You)'}
+                      {member.id === user?.id && ` (${t('taskCreate.you')})`}
                     </Text>
                   </TouchableOpacity>
                 ))}

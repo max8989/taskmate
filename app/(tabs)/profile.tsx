@@ -1,31 +1,44 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { Alert, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { useAuth } from '../../hooks/useAuth'
+import { useLanguage } from '../../hooks/useLanguage'
 import { useLogout } from '../../src/hooks/useAuthQuery'
+import { formatProfileDate } from '../../src/lib/dateUtils'
 
 export default function ProfileScreen() {
   const { t } = useTranslation()
   const { user, session, profile } = useAuth()
+  const { currentLanguage, currentLanguageDisplay, supportedLanguages, changeLanguage } = useLanguage()
   const logoutMutation = useLogout()
+  const [showLanguageModal, setShowLanguageModal] = useState(false)
 
   const handleLogout = async () => {
     Alert.alert(
-      'Logout',
-      'Are you sure you want to logout?',
+      t('profile.logout'),
+      t('profile.confirmLeave'),
       [
         {
-          text: 'Cancel',
+          text: t('common.cancel'),
           style: 'cancel',
         },
         {
-          text: 'Logout',
+          text: t('profile.logout'),
           style: 'destructive',
           onPress: () => {
             logoutMutation.mutate()
           },
         },
       ],
+    )
+  }
+
+  const handleLanguageSelect = async (languageCode: string) => {
+    await changeLanguage(languageCode as 'en' | 'fr')
+    setShowLanguageModal(false)
+    Alert.alert(
+      t('language.select'),
+      t('language.changeSuccess')
     )
   }
 
@@ -42,74 +55,74 @@ export default function ProfileScreen() {
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Account</Text>
+        <Text style={styles.sectionTitle}>{t('ui.account')}</Text>
         
         <View style={styles.menuItem}>
-          <Text style={styles.menuItemText}>Display Name</Text>
+          <Text style={styles.menuItemText}>{t('ui.displayName')}</Text>
           <Text style={styles.menuItemValue}>
-            {profile?.display_name || user?.user_metadata?.display_name || 'Not set'}
+            {profile?.display_name || user?.user_metadata?.display_name || t('ui.notSet')}
           </Text>
         </View>
         
         <View style={styles.menuItem}>
-          <Text style={styles.menuItemText}>Email</Text>
+          <Text style={styles.menuItemText}>{t('ui.email')}</Text>
           <Text style={styles.menuItemValue}>{user?.email}</Text>
         </View>
         
         <View style={styles.menuItem}>
-          <Text style={styles.menuItemText}>Role</Text>
+          <Text style={styles.menuItemText}>{t('ui.role')}</Text>
           <Text style={styles.menuItemValue}>
-            {profile?.role === 'admin' ? '👑 Admin' : '👤 Member'}
+            {profile?.role === 'admin' ? `👑 ${t('profile.adminBadge')}` : `👤 ${t('profile.memberBadge')}`}
           </Text>
         </View>
         
         <View style={styles.menuItem}>
-          <Text style={styles.menuItemText}>Member Since</Text>
+          <Text style={styles.menuItemText}>{t('ui.memberSince')}</Text>
           <Text style={styles.menuItemValue}>
-            {user?.created_at ? new Date(user.created_at).toLocaleDateString() : 'Unknown'}
+            {user?.created_at ? formatProfileDate(user.created_at) : t('ui.unknown')}
           </Text>
         </View>
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Stats</Text>
+        <Text style={styles.sectionTitle}>{t('ui.stats')}</Text>
         
         <View style={styles.menuItem}>
-          <Text style={styles.menuItemText}>Current Streak</Text>
-          <Text style={styles.menuItemValue}>{profile?.current_streak || 0} days</Text>
+          <Text style={styles.menuItemText}>{t('ui.currentStreak')}</Text>
+          <Text style={styles.menuItemValue}>{profile?.current_streak || 0} {t('ui.days')}</Text>
         </View>
         
         <View style={styles.menuItem}>
-          <Text style={styles.menuItemText}>Total Points</Text>
-          <Text style={styles.menuItemValue}>{profile?.total_points || 0} pts</Text>
+          <Text style={styles.menuItemText}>{t('ui.totalPoints')}</Text>
+          <Text style={styles.menuItemValue}>{profile?.total_points || 0} {t('ui.pts')}</Text>
         </View>
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Settings</Text>
+        <Text style={styles.sectionTitle}>{t('ui.settings')}</Text>
         
-        <TouchableOpacity style={styles.menuItem}>
-          <Text style={styles.menuItemText}>Language</Text>
-          <Text style={styles.menuItemValue}>English</Text>
+        <TouchableOpacity style={styles.menuItem} onPress={() => setShowLanguageModal(true)}>
+          <Text style={styles.menuItemText}>{t('ui.language')}</Text>
+          <Text style={styles.menuItemValue}>{currentLanguageDisplay}</Text>
         </TouchableOpacity>
         
         <TouchableOpacity style={styles.menuItem}>
-          <Text style={styles.menuItemText}>Notifications</Text>
-          <Text style={styles.menuItemValue}>Enabled</Text>
+          <Text style={styles.menuItemText}>{t('ui.notifications')}</Text>
+          <Text style={styles.menuItemValue}>{t('ui.enabled')}</Text>
         </TouchableOpacity>
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Household</Text>
+        <Text style={styles.sectionTitle}>{t('ui.household')}</Text>
         
         <TouchableOpacity style={styles.menuItem}>
-          <Text style={styles.menuItemText}>Household Info</Text>
-          <Text style={styles.menuItemValue}>View Details</Text>
+          <Text style={styles.menuItemText}>{t('ui.householdInfo')}</Text>
+          <Text style={styles.menuItemValue}>{t('ui.viewDetails')}</Text>
         </TouchableOpacity>
         
         <TouchableOpacity style={styles.menuItem}>
-          <Text style={styles.menuItemText}>Invite Members</Text>
-          <Text style={styles.menuItemValue}>Share Code</Text>
+          <Text style={styles.menuItemText}>{t('ui.inviteMembers')}</Text>
+          <Text style={styles.menuItemValue}>{t('ui.shareCode')}</Text>
         </TouchableOpacity>
       </View>
 
@@ -120,7 +133,7 @@ export default function ProfileScreen() {
           disabled={logoutMutation.isPending}
         >
           <Text style={styles.logoutButtonText}>
-            {logoutMutation.isPending ? 'Logging out...' : 'Logout'}
+            {logoutMutation.isPending ? t('common.loading') : t('profile.logout')}
           </Text>
         </TouchableOpacity>
       </View>
@@ -132,6 +145,40 @@ export default function ProfileScreen() {
         <Text style={styles.debugText}>Email: {user?.email}</Text>
         <Text style={styles.debugText}>Household ID: {profile?.household_id || 'None'}</Text>
       </View>
+
+      {/* Language Selection Modal */}
+      <Modal
+        visible={showLanguageModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowLanguageModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>{t('language.select')}</Text>
+            
+            {supportedLanguages.map((language) => (
+              <TouchableOpacity
+                key={language.code}
+                style={styles.languageOption}
+                onPress={() => handleLanguageSelect(language.code)}
+              >
+                <Text style={styles.languageOptionText}>{language.name}</Text>
+                {language.code === currentLanguage && (
+                  <Text style={styles.checkmark}>✓</Text>
+                )}
+              </TouchableOpacity>
+            ))}
+            
+            <TouchableOpacity
+              style={styles.modalCancelButton}
+              onPress={() => setShowLanguageModal(false)}
+            >
+              <Text style={styles.modalCancelText}>{t('common.cancel')}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   )
 }
@@ -244,5 +291,56 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#A0AEC0',
     fontFamily: 'monospace',
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 24,
+    width: '80%',
+    alignItems: 'center',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#2D3748',
+    marginBottom: 20,
+  },
+  languageOption: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    width: '100%',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F7FAFC',
+  },
+  languageOptionText: {
+    fontSize: 16,
+    color: '#2D3748',
+  },
+  checkmark: {
+    fontSize: 18,
+    color: '#4299E1',
+  },
+  modalCancelButton: {
+    marginTop: 20,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    backgroundColor: '#E53E3E',
+    borderRadius: 12,
+    width: '100%',
+    alignItems: 'center',
+  },
+  modalCancelText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
 }) 

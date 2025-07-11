@@ -1,9 +1,11 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { Text } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function TabLayout() {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
 
   return (
@@ -29,7 +31,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Dashboard',
+          title: t('dashboard.title') || 'Dashboard',
           tabBarIcon: ({ color, focused }) => (
             <Text style={{ fontSize: 20, color }}>🏠</Text>
           ),
@@ -38,7 +40,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="explore"
         options={{
-          title: 'Tasks',
+          title: t('tasks.title') || 'Tasks',
           tabBarIcon: ({ color, focused }) => (
             <Text style={{ fontSize: 20, color }}>📝</Text>
           ),
@@ -47,7 +49,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Profile',
+          title: t('profile.title') || 'Profile',
           tabBarIcon: ({ color, focused }) => (
             <Text style={{ fontSize: 20, color }}>👤</Text>
           ),

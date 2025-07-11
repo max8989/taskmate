@@ -208,33 +208,33 @@ export default function TaskDetailScreen() {
             {/* Description */}
             {task.description && (
               <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Description</Text>
+                <Text style={styles.sectionTitle}>{t('taskDetail.description')}</Text>
                 <Text style={styles.description}>{task.description}</Text>
               </View>
             )}
 
             {/* Task Details */}
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Task Details</Text>
+              <Text style={styles.sectionTitle}>{t('taskDetail.taskDetails')}</Text>
               <View style={styles.detailsGrid}>
                 <View style={styles.detailItem}>
-                  <Text style={styles.detailLabel}>Category</Text>
-                  <Text style={styles.detailValue}>{task.category}</Text>
+                  <Text style={styles.detailLabel}>{t('taskDetail.category')}</Text>
+                  <Text style={styles.detailValue}>{t(`categories.${task.category}`)}</Text>
                 </View>
                 <View style={styles.detailItem}>
-                  <Text style={styles.detailLabel}>Points</Text>
+                  <Text style={styles.detailLabel}>{t('taskDetail.points')}</Text>
                   <Text style={styles.detailValue}>{task.points_value}</Text>
                 </View>
                 <View style={styles.detailItem}>
-                  <Text style={styles.detailLabel}>Type</Text>
+                  <Text style={styles.detailLabel}>{t('taskDetail.type')}</Text>
                   <Text style={styles.detailValue}>
-                    {task.is_recurring ? `Recurring (${task.frequency_type})` : 'One-time'}
+                    {task.is_recurring ? t(`taskDetail.recurring${task.frequency_type.charAt(0).toUpperCase() + task.frequency_type.slice(1)}`) : t('taskDetail.oneTime')}
                   </Text>
                 </View>
                 {task.created_by_profile && (
                   <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>Created by</Text>
-                    <Text style={styles.detailValue}>{task.created_by_profile.display_name}</Text>
+                    <Text style={styles.detailLabel}>{t('taskDetail.createdBy')}</Text>
+                    <Text style={styles.detailValue}>{task.created_by_profile?.display_name}</Text>
                   </View>
                 )}
                 {task.is_deleted && task.deleted_by_profile && (
@@ -254,41 +254,40 @@ export default function TaskDetailScreen() {
               </View>
             </View>
 
-            {/* Scheduling Information */}
+            {/* Schedule Information */}
             {task.is_recurring && (
               <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Schedule</Text>
-                <View style={styles.detailsGrid}>
+                <Text style={styles.sectionTitle}>{t('taskDetail.schedule')}</Text>
+                <View style={styles.scheduleInfo}>
                   {task.scheduled_time && (
-                    <View style={styles.detailItem}>
-                      <Text style={styles.detailLabel}>Time</Text>
-                      <Text style={styles.detailValue}>{formatTime(task.scheduled_time)}</Text>
+                    <View style={styles.scheduleItem}>
+                      <Text style={styles.scheduleLabel}>{t('taskDetail.time')}</Text>
+                      <Text style={styles.scheduleValue}>
+                        {new Date(`2000-01-01T${task.scheduled_time}`).toLocaleTimeString([], { 
+                          hour: '2-digit', 
+                          minute: '2-digit' 
+                        })}
+                      </Text>
                     </View>
                   )}
-                  {task.frequency_type === 'weekly' && task.scheduled_days && task.scheduled_days.length > 0 && (
-                    <View style={styles.detailItem}>
-                      <Text style={styles.detailLabel}>Days</Text>
-                      <Text style={styles.detailValue}>{formatScheduledDays(task.scheduled_days)}</Text>
-                    </View>
-                  )}
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>Repeat</Text>
-                    <Text style={styles.detailValue}>
-                      Every {task.frequency_value} {task.frequency_type === 'daily' ? 'day(s)' : 
-                             task.frequency_type === 'weekly' ? 'week(s)' : 'month(s)'}
+                  
+                  <View style={styles.scheduleItem}>
+                    <Text style={styles.scheduleLabel}>{t('taskDetail.repeat')}</Text>
+                    <Text style={styles.scheduleValue}>
+                      {t('taskDetail.everyDays', { count: task.frequency_value || 1 })}
                     </Text>
                   </View>
                 </View>
               </View>
             )}
 
-            {/* Completion Restrictions */}
+            {/* Completion Rules */}
             {task.earliest_completion_time && (
               <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Completion Rules</Text>
+                <Text style={styles.sectionTitle}>{t('taskDetail.completionRules')}</Text>
                 <View style={styles.completionRule}>
                   <Text style={styles.completionRuleText}>
-                    ⏰ Can only be completed after {formatTime(task.earliest_completion_time)} on the due date
+                    🕐 {t('taskDetail.canOnlyCompleteAfter', { time: task.earliest_completion_time })}
                   </Text>
                 </View>
               </View>
@@ -297,7 +296,7 @@ export default function TaskDetailScreen() {
             {/* Participants */}
             {task.task_participants && task.task_participants.length > 0 && (
               <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Participants (Rotation Order)</Text>
+                <Text style={styles.sectionTitle}>{t('taskDetail.participantsRotation')}</Text>
                 <View style={styles.participantsList}>
                   {task.task_participants.map((participant: any, index: number) => (
                     <View key={participant.id} style={styles.participantItem}>
@@ -312,7 +311,7 @@ export default function TaskDetailScreen() {
             {/* Pending Assignments */}
             {pendingAssignments && pendingAssignments.length > 0 && (
               <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Pending Assignments</Text>
+                <Text style={styles.sectionTitle}>{t('taskDetail.pendingAssignments')}</Text>
                 {pendingAssignments.map((assignment: any) => {
                   const isOverdue = (() => {
                     const today = startOfDay(new Date())
@@ -664,6 +663,24 @@ const styles = StyleSheet.create({
   deleteButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
+    fontWeight: '600',
+  },
+  scheduleInfo: {
+    gap: 8,
+  },
+  scheduleItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  scheduleLabel: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  scheduleValue: {
+    fontSize: 14,
+    color: '#1F2937',
     fontWeight: '600',
   },
 }) 

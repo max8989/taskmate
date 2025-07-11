@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { ActivityIndicator, Alert, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { useAuth } from '../../hooks/useAuth'
 import { useCompleteAnyTaskAssignment, useTaskAssignments, useTaskPendingAssignments, useTasks, useUncompleteTaskAssignment, useUserTaskAssignments } from '../../src/hooks/useTaskQuery'
+import { formatTaskDate } from '../../src/lib/dateUtils'
 
 // Helper function to check if task completion is allowed
 function canCompleteTask(task: any, assignment: any): { allowed: boolean; message?: string; timeUntilAllowed?: string } {
@@ -148,7 +149,7 @@ export default function TasksScreen() {
     >
       <View style={styles.header}>
         <Text style={styles.title}>{t('tasks.title')}</Text>
-        <Text style={styles.subtitle}>Manage your household tasks</Text>
+        <Text style={styles.subtitle}>{t('tasks.manageHousehold')}</Text>
       </View>
 
       <View style={styles.actionContainer}>
@@ -187,8 +188,8 @@ export default function TasksScreen() {
           ))
         ) : (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyText}>No upcoming tasks</Text>
-            <Text style={styles.emptySubtext}>Create recurring tasks to see them here</Text>
+            <Text style={styles.emptyText}>{t('tasks.noUpcoming')}</Text>
+            <Text style={styles.emptySubtext}>{t('tasks.createRecurringHelp')}</Text>
           </View>
         )}
       </CollapsibleSection>
@@ -197,8 +198,8 @@ export default function TasksScreen() {
       {householdOverdueAssignments.length > 0 && (
         <CollapsibleSection
           id="overdue"
-          title={`🚨 Overdue Household Tasks (${householdOverdueAssignments.length})`}
-          subtitle="Help out by completing these overdue tasks!"
+          title={`🚨 ${t('tasks.overdue')} ${t('tasks.householdTasksToday', { count: householdOverdueAssignments.length })}`}
+          subtitle={t('tasks.anyoneCanComplete')}
           isCollapsed={collapsedSections.overdue}
           onToggle={() => toggleSection('overdue')}
         >
@@ -211,8 +212,8 @@ export default function TasksScreen() {
       {householdTodayAssignments.length > 0 && (
         <CollapsibleSection
           id="householdToday"
-          title={`🏠 Household Tasks Due Today (${householdTodayAssignments.length})`}
-          subtitle="Anyone can complete these tasks to help the household!"
+          title={`🏠 ${t('tasks.householdTasksToday', { count: householdTodayAssignments.length })}`}
+          subtitle={t('tasks.anyoneCanComplete')}
           isCollapsed={collapsedSections.householdToday}
           onToggle={() => toggleSection('householdToday')}
         >
@@ -224,7 +225,7 @@ export default function TasksScreen() {
 
       <CollapsibleSection
         id="allTasks"
-        title={`🏠 All Household Tasks (${tasks?.length || 0})`}
+        title={`🏠 ${t('tasks.allHouseholdTasks', { count: tasks?.length || 0 })}`}
         isCollapsed={collapsedSections.allTasks}
         onToggle={() => toggleSection('allTasks')}
       >
@@ -234,8 +235,8 @@ export default function TasksScreen() {
           ))
         ) : (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyText}>No tasks created yet</Text>
-            <Text style={styles.emptySubtext}>Create your first task to get started!</Text>
+            <Text style={styles.emptyText}>{t('tasks.noUpcoming')}</Text>
+            <Text style={styles.emptySubtext}>{t('tasks.createRecurringHelp')}</Text>
           </View>
         )}
       </CollapsibleSection>
@@ -300,6 +301,7 @@ function SimpleTaskCard({ assignment, task, completed = false }: {
   task?: any,
   completed?: boolean
 }) {
+  const { t } = useTranslation()
   const { user } = useAuth()
   const router = useRouter()
   const completeTaskMutation = useCompleteAnyTaskAssignment()
@@ -315,20 +317,20 @@ function SimpleTaskCard({ assignment, task, completed = false }: {
     
     if (!completionCheck.allowed) {
       Alert.alert(
-        'Cannot Complete Yet',
-        completionCheck.message || 'Task cannot be completed at this time.',
-        [{ text: 'OK' }]
+        t('tasks.cannotCompleteYet'),
+        completionCheck.message || t('tasks.cannotCompleteMessage'),
+        [{ text: t('common.ok') }]
       )
       return
     }
     
     Alert.alert(
-      'Complete Task',
-      `Mark "${displayTask.title}" as completed?`,
+      t('tasks.completeTask'),
+      t('tasks.markAsCompleted', { title: displayTask.title }),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         { 
-          text: 'Complete', 
+          text: t('tasks.complete'), 
           onPress: () => {
             completeTaskMutation.mutate({
               assignmentId: assignment.id,
@@ -347,7 +349,7 @@ function SimpleTaskCard({ assignment, task, completed = false }: {
       'Uncomplete Task',
       `Mark "${displayTask.title}" as uncompleted?`,
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         { 
           text: 'Uncomplete', 
           onPress: () => {
@@ -362,18 +364,7 @@ function SimpleTaskCard({ assignment, task, completed = false }: {
   }
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
-    const today = new Date()
-    const tomorrow = new Date(today)
-    tomorrow.setDate(tomorrow.getDate() + 1)
-    
-    if (date.toDateString() === today.toDateString()) {
-      return 'Today'
-    } else if (date.toDateString() === tomorrow.toDateString()) {
-      return 'Tomorrow'
-    } else {
-      return date.toLocaleDateString()
-    }
+    return formatTaskDate(dateString)
   }
 
   const isOverdue = assignment && !completed && (() => {
@@ -425,15 +416,18 @@ function SimpleTaskCard({ assignment, task, completed = false }: {
       {assignment && (
         <View style={styles.assignmentInfo}>
           <Text style={[styles.assignmentText, completed && styles.completedText]}>
-            Assigned to: {assignment.assigned_to_profile?.display_name}
+            {assignment.assigned_to === user?.id 
+              ? t('tasks.assignedToYou', { name: assignment.assigned_to_profile?.display_name })
+              : t('tasks.assignedToOther', { name: assignment.assigned_to_profile?.display_name })
+            }
           </Text>
           <Text style={[
             styles.dueDateText,
             completed && styles.completedText,
             isOverdue && styles.overdueText
           ]}>
-            Due: {formatDate(assignment.due_date)}
-            {isOverdue && ' (Overdue)'}
+            {t('tasks.dueDate', { date: formatDate(assignment.due_date) })}
+            {isOverdue && ` (${t('tasks.overdue')})`}
           </Text>
           {displayTask.earliest_completion_time && !completed && (
             <Text style={[
@@ -441,8 +435,8 @@ function SimpleTaskCard({ assignment, task, completed = false }: {
               !completionCheck.allowed && styles.restrictedTimeText
             ]}>
               {completionCheck.allowed 
-                ? `Can complete after ${displayTask.earliest_completion_time}` 
-                : `Available after ${displayTask.earliest_completion_time} today`
+                ? t('tasks.canCompleteAfter', { time: displayTask.earliest_completion_time })
+                : t('tasks.canCompleteAfter', { time: displayTask.earliest_completion_time }) + ' today'
               }
             </Text>
           )}
@@ -455,11 +449,11 @@ function SimpleTaskCard({ assignment, task, completed = false }: {
             styles.tapHint,
             !completionCheck.allowed && styles.restrictedTimeText
           ]}>
-            {completeTaskMutation.isPending ? 'Completing...' : 
-             uncompleteTaskMutation.isPending ? 'Uncompleting...' :
-             completed ? 'Tap to uncomplete' :
+            {completeTaskMutation.isPending ? t('tasks.completing') : 
+             uncompleteTaskMutation.isPending ? t('tasks.uncompleting') :
+             completed ? t('tasks.tapToUncomplete') :
              !completionCheck.allowed ? 'Tap for details • ' + completionCheck.message :
-             'Tap to complete • Long press for details'
+             t('tasks.tapToCompleteDetails')
             }
           </Text>
         </View>
@@ -470,6 +464,7 @@ function SimpleTaskCard({ assignment, task, completed = false }: {
 
 // Household Task Card Component - allows any user to complete any task
 function HouseholdTaskCard({ assignment }: { assignment: any }) {
+  const { t } = useTranslation()
   const { user } = useAuth()
   const router = useRouter()
   const completeTaskMutation = useCompleteAnyTaskAssignment()
@@ -481,20 +476,20 @@ function HouseholdTaskCard({ assignment }: { assignment: any }) {
   const handleCompleteTask = () => {
     if (!completionCheck.allowed) {
       Alert.alert(
-        'Cannot Complete Yet',
-        completionCheck.message || 'Task cannot be completed at this time.',
-        [{ text: 'OK' }]
+        t('tasks.cannotCompleteYet'),
+        completionCheck.message || t('tasks.cannotCompleteMessage'),
+        [{ text: t('common.ok') }]
       )
       return
     }
 
     Alert.alert(
-      'Complete Task',
+      t('tasks.completeTask'),
       `Mark "${assignment.tasks.title}" as completed?\n\nThis task is assigned to ${assignment.assigned_to_profile?.display_name}, but you can complete it to help out!`,
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         { 
-          text: 'Complete', 
+          text: t('tasks.complete'), 
           onPress: () => {
             completeTaskMutation.mutate({
               assignmentId: assignment.id,
@@ -507,18 +502,7 @@ function HouseholdTaskCard({ assignment }: { assignment: any }) {
   }
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
-    const today = new Date()
-    const tomorrow = new Date(today)
-    tomorrow.setDate(tomorrow.getDate() + 1)
-    
-    if (date.toDateString() === today.toDateString()) {
-      return 'Today'
-    } else if (date.toDateString() === tomorrow.toDateString()) {
-      return 'Tomorrow'
-    } else {
-      return date.toLocaleDateString()
-    }
+    return formatTaskDate(dateString)
   }
 
   const isOverdue = (() => {
@@ -567,15 +551,17 @@ function HouseholdTaskCard({ assignment }: { assignment: any }) {
       
       <View style={styles.assignmentInfo}>
         <Text style={styles.assignmentText}>
-          Assigned to: {assignment.assigned_to_profile?.display_name}
-          {isAssignedToCurrentUser && ' (You)'}
+          {isAssignedToCurrentUser 
+            ? t('tasks.assignedToYou', { name: assignment.assigned_to_profile?.display_name })
+            : t('tasks.assignedToOther', { name: assignment.assigned_to_profile?.display_name })
+          }
         </Text>
         <Text style={[
           styles.dueDateText,
           isOverdue && styles.overdueText
         ]}>
-          Due: {formatDate(assignment.due_date)}
-          {isOverdue && ' (Overdue)'}
+          {t('tasks.dueDate', { date: formatDate(assignment.due_date) })}
+          {isOverdue && ` (${t('tasks.overdue')})`}
         </Text>
         {assignment.tasks.earliest_completion_time && (
           <Text style={[
@@ -583,8 +569,8 @@ function HouseholdTaskCard({ assignment }: { assignment: any }) {
             !completionCheck.allowed && styles.restrictedTimeText
           ]}>
             {completionCheck.allowed 
-              ? `Can complete after ${assignment.tasks.earliest_completion_time}` 
-              : `Available after ${assignment.tasks.earliest_completion_time} today`
+              ? t('tasks.canCompleteAfter', { time: assignment.tasks.earliest_completion_time })
+              : t('tasks.canCompleteAfter', { time: assignment.tasks.earliest_completion_time }) + ' today'
             }
           </Text>
         )}
@@ -595,10 +581,10 @@ function HouseholdTaskCard({ assignment }: { assignment: any }) {
           styles.tapHint,
           !completionCheck.allowed && styles.restrictedTimeText
         ]}>
-          {completeTaskMutation.isPending ? 'Completing...' : 
+          {completeTaskMutation.isPending ? t('common.loading') : 
            !completionCheck.allowed ? completionCheck.message :
-           isAssignedToCurrentUser ? 'Tap to complete your task' : 
-           'Tap to help complete this task'
+           isAssignedToCurrentUser ? t('tasks.tapToComplete') : 
+           t('tasks.tapHelpComplete')
           }
         </Text>
       </View>
@@ -608,6 +594,7 @@ function HouseholdTaskCard({ assignment }: { assignment: any }) {
 
 // Task Detail Component for testing rotation
 function TaskDetailCard({ task }: { task: any }) {
+  const { t } = useTranslation()
   const router = useRouter()
   const { data: pendingAssignments } = useTaskPendingAssignments(task?.id)
   
@@ -618,7 +605,10 @@ function TaskDetailCard({ task }: { task: any }) {
   }
 
   const formatScheduledDays = (days: number[]) => {
-    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+    const dayNames = [
+      t('days.sun'), t('days.mon'), t('days.tue'), t('days.wed'), 
+      t('days.thu'), t('days.fri'), t('days.sat')
+    ]
     return days.sort().map(day => dayNames[day]).join(', ')
   }
 
@@ -638,15 +628,15 @@ function TaskDetailCard({ task }: { task: any }) {
       )}
       
       <View style={styles.taskDetailInfo}>
-        <Text style={styles.taskDetailLabel}>Category: {task.category}</Text>
+        <Text style={styles.taskDetailLabel}>{t('taskDetail.category')}: {t(`categories.${task.category}`)}</Text>
         <Text style={styles.taskDetailLabel}>
-          Type: {task.is_recurring ? `Recurring (${task.frequency_type})` : 'One-time'}
+          {t('taskDetail.type')}: {task.is_recurring ? t(`taskDetail.recurring${task.frequency_type.charAt(0).toUpperCase() + task.frequency_type.slice(1)}`) : t('taskDetail.oneTime')}
         </Text>
         
         {/* Show scheduling details for recurring tasks */}
         {task.is_recurring && task.scheduled_time && (
           <Text style={styles.taskDetailLabel}>
-            Time: {formatScheduledTime(task.scheduled_time)}
+            {t('taskDetail.time')}: {formatScheduledTime(task.scheduled_time)}
           </Text>
         )}
         
@@ -656,19 +646,19 @@ function TaskDetailCard({ task }: { task: any }) {
           </Text>
         )}
         
-        <Text style={styles.taskDetailLabel}>Points: {task.points_value}</Text>
+        <Text style={styles.taskDetailLabel}>{t('taskDetail.points')}: {task.points_value}</Text>
       </View>
       
       {pendingAssignments && pendingAssignments.length > 0 && (
         <View style={styles.pendingAssignments}>
-          <Text style={styles.pendingTitle}>Pending Assignments:</Text>
+          <Text style={styles.pendingTitle}>{t('tasks.pendingAssignments')}</Text>
           {pendingAssignments.map((assignment: any) => (
             <Text key={assignment.id} style={styles.pendingAssignment}>
-              • {assignment.assigned_to_profile?.display_name} - Due: {
-                assignment.due_datetime ? 
+              • {assignment.assigned_to_profile?.display_name} - {t('tasks.dueDate', { 
+                date: assignment.due_datetime ? 
                   new Date(assignment.due_datetime).toLocaleString() : 
                   assignment.due_date
-              }
+              })}
             </Text>
           ))}
         </View>
@@ -676,20 +666,20 @@ function TaskDetailCard({ task }: { task: any }) {
       
       {task.task_participants && task.task_participants.length > 0 && (
         <View style={styles.participantsList}>
-          <Text style={styles.participantsTitle}>Rotation Order:</Text>
+          <Text style={styles.participantsTitle}>{t('taskDetail.participantsRotation')}:</Text>
           {task.task_participants.map((participant: any, index: number) => (
             <Text key={participant.id} style={styles.participant}>
               {index + 1}. {participant.profiles?.display_name}
             </Text>
-                  ))}
+          ))}
+        </View>
+      )}
+      
+      <View style={styles.tapHintContainer}>
+        <Text style={styles.tapHint}>{t('taskDetail.tapForDetails')}</Text>
       </View>
-    )}
-    
-    <View style={styles.tapHintContainer}>
-      <Text style={styles.tapHint}>Tap for details</Text>
-    </View>
-  </TouchableOpacity>
-)
+    </TouchableOpacity>
+  )
 }
 
 const styles = StyleSheet.create({
