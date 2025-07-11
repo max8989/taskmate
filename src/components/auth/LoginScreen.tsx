@@ -3,14 +3,16 @@ import { useRouter } from 'expo-router'
 import React, { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
-import { supabase } from '../../lib/supabase'
+import { useLogin, usePasswordReset } from '../../hooks/useAuthQuery'
 
 export function LoginScreen() {
   const { t } = useTranslation()
   const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [loading, setLoading] = useState(false)
+
+  const loginMutation = useLogin()
+  const passwordResetMutation = usePasswordReset()
 
   const validateForm = () => {
     if (!email) {
@@ -26,24 +28,8 @@ export function LoginScreen() {
 
   const handleLogin = async () => {
     if (!validateForm()) return
-
-    setLoading(true)
-    try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password,
-      })
-
-      if (error) {
-        Alert.alert('Error', t('auth.invalidCredentials'))
-      } else {
-        router.replace('/(tabs)')
-      }
-    } catch (error) {
-      Alert.alert('Error', t('common.error'))
-    } finally {
-      setLoading(false)
-    }
+    
+    loginMutation.mutate({ email, password })
   }
 
   const handleForgotPassword = async () => {
@@ -52,20 +38,7 @@ export function LoginScreen() {
       return
     }
 
-    setLoading(true)
-    try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email.trim())
-      
-      if (error) {
-        Alert.alert('Error', error.message)
-      } else {
-        Alert.alert('Success', t('auth.resetSent'))
-      }
-    } catch (error) {
-      Alert.alert('Error', t('common.error'))
-    } finally {
-      setLoading(false)
-    }
+    passwordResetMutation.mutate(email)
   }
 
   return (
@@ -115,18 +88,20 @@ export function LoginScreen() {
           <TouchableOpacity 
             style={styles.forgotButton}
             onPress={handleForgotPassword}
-            disabled={loading}
+            disabled={passwordResetMutation.isPending}
           >
-            <Text style={styles.forgotText}>{t('auth.forgotPassword')}</Text>
+            <Text style={styles.forgotText}>
+              {passwordResetMutation.isPending ? 'Sending...' : t('auth.forgotPassword')}
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.loginButton, loading && styles.disabledButton]}
+            style={[styles.loginButton, loginMutation.isPending && styles.disabledButton]}
             onPress={handleLogin}
-            disabled={loading}
+            disabled={loginMutation.isPending}
           >
             <Text style={styles.loginButtonText}>
-              {loading ? t('common.loading') : t('auth.loginButton')}
+              {loginMutation.isPending ? t('common.loading') : t('auth.loginButton')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -226,13 +201,12 @@ const styles = StyleSheet.create({
   },
   forgotButton: {
     alignSelf: 'flex-end',
-    padding: 8,
-    marginBottom: 8,
+    marginBottom: 16,
   },
   forgotText: {
     color: '#FF6B4D',
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   loginButton: {
     backgroundColor: '#FF6B4D',

@@ -1,45 +1,37 @@
-import { Session } from '@supabase/supabase-js'
 import { TamaguiProvider } from '@tamagui/core'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useFonts } from 'expo-font'
 import { SplashScreen } from 'expo-router'
-import React, { useEffect, useState } from 'react'
+import React, { useEffect } from 'react'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 
+import { useAuth } from '../hooks/useAuth'
 import '../src/lib/i18n'
-import { supabase } from '../src/lib/supabase'
 import tamaguiConfig from '../tamagui.config'
 
 // Prevent the splash screen from auto-hiding before asset loading is complete
 SplashScreen.preventAutoHideAsync()
 
-const queryClient = new QueryClient()
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 2,
+      staleTime: 1000 * 60 * 5, // 5 minutes
+      refetchOnWindowFocus: false,
+    },
+    mutations: {
+      retry: 1,
+    },
+  },
+})
 
-export default function RootLayout() {
-  const [session, setSession] = useState<Session | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+function AppContent() {
+  const { isLoading, isAuthenticated, hasHousehold } = useAuth()
 
   const [fontsLoaded] = useFonts({
     Inter: require('@tamagui/font-inter/otf/Inter-Medium.otf'),
     InterBold: require('@tamagui/font-inter/otf/Inter-Bold.otf'),
   })
-
-  useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session)
-      setIsLoading(false)
-    })
-
-    // Listen for auth changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session)
-    })
-
-    return () => subscription.unsubscribe()
-  }, [])
 
   useEffect(() => {
     if (fontsLoaded && !isLoading) {
@@ -51,20 +43,36 @@ export default function RootLayout() {
     return null
   }
 
+  console.log('Render state:', { 
+    isAuthenticated, 
+    hasHousehold, 
+    isLoading 
+  })
+
+  // Determine which layout to show
+  if (!isAuthenticated) {
+    console.log('Rendering AuthLayout - not authenticated')
+    return <AuthLayout />
+  }
+
+  if (!hasHousehold) {
+    console.log('Rendering HouseholdSetupLayout - authenticated but no household')
+    return <HouseholdSetupLayout />
+  }
+
+  console.log('Rendering AuthenticatedLayout - authenticated with household')
+  return <AuthenticatedLayout />
+}
+
+export default function RootLayout() {
   return (
-    <TamaguiProvider config={tamaguiConfig}>
-      <QueryClientProvider client={queryClient}>
+    <QueryClientProvider client={queryClient}>
+      <TamaguiProvider config={tamaguiConfig}>
         <SafeAreaProvider>
-          {session ? (
-            // User is authenticated - show main app
-            <AuthenticatedLayout />
-          ) : (
-            // User is not authenticated - show auth screens
-            <AuthLayout />
-          )}
+          <AppContent />
         </SafeAreaProvider>
-      </QueryClientProvider>
-    </TamaguiProvider>
+      </TamaguiProvider>
+    </QueryClientProvider>
   )
 }
 
@@ -80,10 +88,28 @@ function AuthenticatedLayout() {
   )
 }
 
-function AuthLayout() {
+function HouseholdSetupLayout() {
   const Stack = require('expo-router').Stack
   return (
     <Stack>
+      <Stack.Screen 
+        name="auth/household" 
+        options={{ headerShown: false }} 
+      />
+    </Stack>
+  )
+}
+
+function AuthLayout() {
+  const Stack = require('expo-router').Stack
+  return (
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        gestureEnabled: false,
+        animationTypeForReplace: 'push',
+      }}
+    >
       <Stack.Screen 
         name="auth/welcome" 
         options={{ headerShown: false }} 
@@ -96,10 +122,7 @@ function AuthLayout() {
         name="auth/signup" 
         options={{ headerShown: false }} 
       />
-      <Stack.Screen 
-        name="auth/household" 
-        options={{ headerShown: false }} 
-      />
     </Stack>
   )
 }
+

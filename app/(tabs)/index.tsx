@@ -1,75 +1,181 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import React from 'react'
+import { useTranslation } from 'react-i18next'
+import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { useLogout } from '../../src/hooks/useAuthQuery'
 
-import { HelloWave } from '@/components/HelloWave';
-import ParallaxScrollView from '@/components/ParallaxScrollView';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
+export default function DashboardScreen() {
+  const { t } = useTranslation()
+  const logoutMutation = useLogout()
 
-export default function HomeScreen() {
+  const handleQuickLogout = async () => {
+    Alert.alert(
+      'Logout',
+      'Are you sure you want to logout?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Logout',
+          style: 'destructive',
+          onPress: () => {
+            logoutMutation.mutate()
+          },
+        },
+      ],
+    )
+  }
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
-  );
+    <ScrollView style={styles.container}>
+      <View style={styles.header}>
+        <View style={styles.headerContent}>
+          <View style={styles.titleContainer}>
+            <Text style={styles.title}>TaskMate Dashboard</Text>
+            <Text style={styles.subtitle}>Welcome to your household task manager</Text>
+          </View>
+          <TouchableOpacity 
+            style={[styles.quickLogoutButton, logoutMutation.isPending && styles.disabledButton]}
+            onPress={handleQuickLogout}
+            disabled={logoutMutation.isPending}
+          >
+            <Text style={styles.quickLogoutText}>
+              {logoutMutation.isPending ? 'Logging out...' : 'Logout'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      <View style={styles.statsContainer}>
+        <View style={styles.statCard}>
+          <Text style={styles.statNumber}>0</Text>
+          <Text style={styles.statLabel}>Tasks Today</Text>
+        </View>
+        
+        <View style={styles.statCard}>
+          <Text style={styles.statNumber}>0</Text>
+          <Text style={styles.statLabel}>Completed</Text>
+        </View>
+        
+        <View style={styles.statCard}>
+          <Text style={styles.statNumber}>0</Text>
+          <Text style={styles.statLabel}>Streak Days</Text>
+        </View>
+      </View>
+
+      <View style={styles.sectionContainer}>
+        <Text style={styles.sectionTitle}>Recent Tasks</Text>
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyText}>No tasks yet</Text>
+          <Text style={styles.emptySubtext}>Create your first task to get started!</Text>
+        </View>
+      </View>
+    </ScrollView>
+  )
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  container: {
+    flex: 1,
+    backgroundColor: '#FFF8F0',
   },
-  stepContainer: {
-    gap: 8,
+  header: {
+    padding: 24,
+    paddingTop: 60,
+  },
+  headerContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  titleContainer: {
+    flex: 1,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#2D3748',
     marginBottom: 8,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  subtitle: {
+    fontSize: 16,
+    color: '#4A5568',
   },
-});
+  quickLogoutButton: {
+    backgroundColor: '#E53E3E',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    marginLeft: 16,
+  },
+  quickLogoutText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  disabledButton: {
+    opacity: 0.6,
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 24,
+    gap: 12,
+    marginBottom: 32,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  statNumber: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#FF6B4D',
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: '#4A5568',
+    textAlign: 'center',
+  },
+  sectionContainer: {
+    paddingHorizontal: 24,
+    marginBottom: 32,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#2D3748',
+    marginBottom: 16,
+  },
+  emptyState: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 32,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  emptyText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#4A5568',
+    marginBottom: 8,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: '#718096',
+    textAlign: 'center',
+  },
+})

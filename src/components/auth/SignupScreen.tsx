@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router'
 import React, { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
-import { supabase } from '../../lib/supabase'
+import { useSignup } from '../../hooks/useAuthQuery'
 
 export function SignupScreen() {
   const { t } = useTranslation()
@@ -12,7 +12,8 @@ export function SignupScreen() {
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [displayName, setDisplayName] = useState('')
-  const [loading, setLoading] = useState(false)
+
+  const signupMutation = useSignup()
 
   const validateForm = () => {
     if (!displayName.trim()) {
@@ -37,45 +38,11 @@ export function SignupScreen() {
   const handleSignup = async () => {
     if (!validateForm()) return
 
-    setLoading(true)
-    try {
-      const { data, error } = await supabase.auth.signUp({
-        email: email.trim(),
-        password,
-        options: {
-          data: {
-            display_name: displayName.trim(),
-          },
-        },
-      })
-
-      if (error) {
-        if (error.message.includes('already registered')) {
-          Alert.alert('Error', t('auth.emailExists'))
-        } else {
-          Alert.alert('Error', error.message)
-        }
-      } else if (data.user) {
-        // Create profile after successful signup
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .insert({
-            id: data.user.id,
-            display_name: displayName.trim(),
-          })
-
-        if (profileError) {
-          console.error('Profile creation error:', profileError)
-        }
-
-        // Navigate to household setup
-        router.replace('/auth/household')
-      }
-    } catch (error) {
-      Alert.alert('Error', t('common.error'))
-    } finally {
-      setLoading(false)
-    }
+    signupMutation.mutate({
+      email,
+      password,
+      displayName,
+    })
   }
 
   return (
@@ -147,12 +114,12 @@ export function SignupScreen() {
           </View>
 
           <TouchableOpacity
-            style={[styles.signupButton, loading && styles.disabledButton]}
+            style={[styles.signupButton, signupMutation.isPending && styles.disabledButton]}
             onPress={handleSignup}
-            disabled={loading}
+            disabled={signupMutation.isPending}
           >
             <Text style={styles.signupButtonText}>
-              {loading ? t('common.loading') : t('auth.signupButton')}
+              {signupMutation.isPending ? t('common.loading') : t('auth.signupButton')}
             </Text>
           </TouchableOpacity>
         </View>
