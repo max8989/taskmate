@@ -953,8 +953,8 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     backgroundColor: '#E2E8F0',
     justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 2,
+    paddingHorizontal: 3,
+    position: 'relative',
   },
   toggleActive: {
     backgroundColor: '#FF6B4D',
@@ -964,9 +964,19 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 12,
     backgroundColor: '#FFFFFF',
+    position: 'absolute',
+    left: 3,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
   },
   toggleCircleActive: {
-    left: 26, // Adjust for active position
+    left: 23, // Move to the right side (50 - 24 - 3 = 23)
   },
   daysContainer: {
     flexDirection: 'row',
