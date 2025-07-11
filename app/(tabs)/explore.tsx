@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router'
-import React from 'react'
+import React, { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { ActivityIndicator, Alert, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { useAuth } from '../../hooks/useAuth'
 import { useCompleteAnyTaskAssignment, useTaskAssignments, useTaskPendingAssignments, useTasks, useUncompleteTaskAssignment, useUserTaskAssignments } from '../../src/hooks/useTaskQuery'
 
@@ -43,12 +43,40 @@ export default function TasksScreen() {
   const router = useRouter()
   const { user, profile } = useAuth()
   
-  const { data: tasks, isLoading: tasksLoading } = useTasks(profile?.household_id)
-  const { data: userAssignments, isLoading: assignmentsLoading } = useUserTaskAssignments(user?.id || null)
-  const { data: allAssignments, isLoading: allAssignmentsLoading } = useTaskAssignments(profile?.household_id)
+  const { data: tasks, isLoading: tasksLoading, refetch: refetchTasks } = useTasks(profile?.household_id)
+  const { data: userAssignments, isLoading: assignmentsLoading, refetch: refetchUserAssignments } = useUserTaskAssignments(user?.id || null)
+  const { data: allAssignments, isLoading: allAssignmentsLoading, refetch: refetchAllAssignments } = useTaskAssignments(profile?.household_id)
+
+  // State for collapsible sections
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({})
+  
+  // State for pull-to-refresh
+  const [refreshing, setRefreshing] = useState(false)
 
   const handleCreateTask = () => {
     router.push('/tasks/create')
+  }
+
+  const toggleSection = (sectionId: string) => {
+    setCollapsedSections(prev => ({
+      ...prev,
+      [sectionId]: !prev[sectionId]
+    }))
+  }
+
+  const onRefresh = async () => {
+    setRefreshing(true)
+    try {
+      await Promise.all([
+        refetchTasks(),
+        refetchUserAssignments(),
+        refetchAllAssignments(),
+      ])
+    } catch (error) {
+      console.error('Error refreshing data:', error)
+    } finally {
+      setRefreshing(false)
+    }
   }
 
   if (tasksLoading || assignmentsLoading || allAssignmentsLoading) {
@@ -91,7 +119,18 @@ export default function TasksScreen() {
   })
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView 
+      style={styles.container}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          colors={['#FF6B4D']}
+          tintColor="#FF6B4D"
+          progressViewOffset={100}
+        />
+      }
+    >
       <View style={styles.header}>
         <Text style={styles.title}>{t('tasks.title')}</Text>
         <Text style={styles.subtitle}>Manage your household tasks</Text>
@@ -103,8 +142,12 @@ export default function TasksScreen() {
         </TouchableOpacity>
       </View>
 
-      <View style={styles.sectionContainer}>
-        <Text style={styles.sectionTitle}>📅 {t('tasks.dueToday')} ({todayAssignments.length})</Text>
+      <CollapsibleSection
+        id="today"
+        title={`📅 ${t('tasks.dueToday')} (${todayAssignments.length})`}
+        isCollapsed={collapsedSections.today}
+        onToggle={() => toggleSection('today')}
+      >
         {todayAssignments.length > 0 ? (
           todayAssignments.map((assignment) => (
             <SimpleTaskCard key={assignment.id} assignment={assignment} />
@@ -115,10 +158,14 @@ export default function TasksScreen() {
             <Text style={styles.emptySubtext}>{t('dashboard.allCaughtUp')}</Text>
           </View>
         )}
-      </View>
+      </CollapsibleSection>
 
-      <View style={styles.sectionContainer}>
-        <Text style={styles.sectionTitle}>📋 {t('tasks.upcoming')} ({upcomingAssignments.length})</Text>
+      <CollapsibleSection
+        id="upcoming"
+        title={`📋 ${t('tasks.upcoming')} (${upcomingAssignments.length})`}
+        isCollapsed={collapsedSections.upcoming}
+        onToggle={() => toggleSection('upcoming')}
+      >
         {upcomingAssignments.length > 0 ? (
           upcomingAssignments.slice(0, 3).map((assignment) => (
             <SimpleTaskCard key={assignment.id} assignment={assignment} />
@@ -129,52 +176,106 @@ export default function TasksScreen() {
             <Text style={styles.emptySubtext}>Create recurring tasks to see them here</Text>
           </View>
         )}
-      </View>
+      </CollapsibleSection>
 
       {/* New section: Household Tasks Anyone Can Complete */}
       {householdOverdueAssignments.length > 0 && (
-        <View style={styles.sectionContainer}>
-          <Text style={styles.sectionTitle}>🚨 Overdue Household Tasks ({householdOverdueAssignments.length})</Text>
-          <Text style={styles.sectionSubtitle}>Help out by completing these overdue tasks!</Text>
+        <CollapsibleSection
+          id="overdue"
+          title={`🚨 Overdue Household Tasks (${householdOverdueAssignments.length})`}
+          subtitle="Help out by completing these overdue tasks!"
+          isCollapsed={collapsedSections.overdue}
+          onToggle={() => toggleSection('overdue')}
+        >
           {householdOverdueAssignments.slice(0, 3).map((assignment) => (
             <HouseholdTaskCard key={assignment.id} assignment={assignment} />
           ))}
-        </View>
+        </CollapsibleSection>
       )}
 
       {householdTodayAssignments.length > 0 && (
-        <View style={styles.sectionContainer}>
-          <Text style={styles.sectionTitle}>🏠 Household Tasks Due Today ({householdTodayAssignments.length})</Text>
-          <Text style={styles.sectionSubtitle}>Anyone can complete these tasks to help the household!</Text>
+        <CollapsibleSection
+          id="householdToday"
+          title={`🏠 Household Tasks Due Today (${householdTodayAssignments.length})`}
+          subtitle="Anyone can complete these tasks to help the household!"
+          isCollapsed={collapsedSections.householdToday}
+          onToggle={() => toggleSection('householdToday')}
+        >
           {householdTodayAssignments.slice(0, 5).map((assignment) => (
             <HouseholdTaskCard key={assignment.id} assignment={assignment} />
           ))}
-        </View>
+        </CollapsibleSection>
       )}
 
-              <View style={styles.sectionContainer}>
-          <Text style={styles.sectionTitle}>🏠 All Household Tasks ({tasks?.length || 0})</Text>
-          {tasks && tasks.length > 0 ? (
-            tasks.slice(0, 5).map((task) => (
-              <TaskDetailCard key={task.id} task={task} />
-            ))
-          ) : (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyText}>No tasks created yet</Text>
-              <Text style={styles.emptySubtext}>Create your first task to get started!</Text>
-            </View>
-          )}
-        </View>
+      <CollapsibleSection
+        id="allTasks"
+        title={`🏠 All Household Tasks (${tasks?.length || 0})`}
+        isCollapsed={collapsedSections.allTasks}
+        onToggle={() => toggleSection('allTasks')}
+      >
+        {tasks && tasks.length > 0 ? (
+          tasks.slice(0, 5).map((task) => (
+            <TaskDetailCard key={task.id} task={task} />
+          ))
+        ) : (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyText}>No tasks created yet</Text>
+            <Text style={styles.emptySubtext}>Create your first task to get started!</Text>
+          </View>
+        )}
+      </CollapsibleSection>
 
       {completedAssignments.length > 0 && (
-        <View style={styles.sectionContainer}>
-          <Text style={styles.sectionTitle}>✅ {t('tasks.completed')} (Recent)</Text>
+        <CollapsibleSection
+          id="completed"
+          title={`✅ ${t('tasks.completed')} (Recent)`}
+          isCollapsed={collapsedSections.completed}
+          onToggle={() => toggleSection('completed')}
+        >
           {completedAssignments.map((assignment) => (
             <SimpleTaskCard key={assignment.id} assignment={assignment} completed />
           ))}
-        </View>
+        </CollapsibleSection>
       )}
     </ScrollView>
+  )
+}
+
+// Collapsible Section Component
+function CollapsibleSection({ 
+  id, 
+  title, 
+  subtitle, 
+  isCollapsed, 
+  onToggle, 
+  children 
+}: { 
+  id: string
+  title: string
+  subtitle?: string
+  isCollapsed: boolean
+  onToggle: () => void
+  children: React.ReactNode 
+}) {
+  return (
+    <View style={styles.sectionContainer}>
+      <TouchableOpacity style={styles.sectionHeader} onPress={onToggle}>
+        <View style={styles.sectionTitleContainer}>
+          <Text style={styles.sectionTitle}>{title}</Text>
+          {subtitle && (
+            <Text style={styles.sectionSubtitle}>{subtitle}</Text>
+          )}
+        </View>
+        <Text style={styles.collapseIcon}>
+          {isCollapsed ? '▶️' : '🔽'}
+        </Text>
+      </TouchableOpacity>
+      {!isCollapsed && (
+        <View style={styles.sectionContent}>
+          {children}
+        </View>
+      )}
+    </View>
   )
 }
 
@@ -624,17 +725,35 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     marginBottom: 32,
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+  },
+  sectionTitleContainer: {
+    flex: 1,
+  },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: '#2D3748',
-    marginBottom: 12,
+    marginBottom: 4,
   },
   sectionSubtitle: {
     fontSize: 14,
     color: '#6B7280',
-    marginBottom: 12,
+    marginBottom: 4,
     fontStyle: 'italic',
+  },
+  collapseIcon: {
+    fontSize: 20,
+    color: '#FF6B4D',
+  },
+  sectionContent: {
+    paddingHorizontal: 8,
+    paddingBottom: 16,
   },
   emptyState: {
     backgroundColor: '#FFFFFF',
