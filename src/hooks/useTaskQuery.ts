@@ -1206,3 +1206,273 @@ export function useCompleteAnyTaskAssignment() {
     },
   })
 }
+
+// Leaderboard and statistics hooks
+
+// Get household leaderboard
+export function useHouseholdLeaderboard(householdId: string | null) {
+  return useQuery({
+    queryKey: ['leaderboard', householdId],
+    queryFn: async () => {
+      if (!householdId) throw new Error('No household ID provided')
+      
+      const { data: profiles, error } = await supabase
+        .from('profiles')
+        .select('id, display_name, avatar_url, current_streak, total_points')
+        .eq('household_id', householdId)
+        .order('total_points', { ascending: false })
+      
+      if (error) throw error
+      
+      // Calculate additional stats for each user
+      const leaderboardWithStats = await Promise.all(
+        profiles.map(async (profile, index) => {
+          // Get weekly points (last 7 days)
+          const weekAgo = new Date()
+          weekAgo.setDate(weekAgo.getDate() - 7)
+          
+                     const { data: weeklyCompletions, error: weeklyError } = await supabase
+             .from('task_assignments')
+             .select('tasks(points_value)')
+             .eq('completed_by', profile.id)
+             .eq('is_completed', true)
+             .gte('completed_at', weekAgo.toISOString())
+           
+           let weeklyPoints = 0
+           if (!weeklyError && weeklyCompletions) {
+             weeklyPoints = weeklyCompletions.reduce((sum, completion: any) => {
+               return sum + (completion.tasks?.points_value || 10)
+             }, 0)
+           }
+          
+          // Get monthly points (last 30 days)
+          const monthAgo = new Date()
+          monthAgo.setDate(monthAgo.getDate() - 30)
+          
+                     const { data: monthlyCompletions, error: monthlyError } = await supabase
+             .from('task_assignments')
+             .select('tasks(points_value)')
+             .eq('completed_by', profile.id)
+             .eq('is_completed', true)
+             .gte('completed_at', monthAgo.toISOString())
+           
+           let monthlyPoints = 0
+           if (!monthlyError && monthlyCompletions) {
+             monthlyPoints = monthlyCompletions.reduce((sum, completion: any) => {
+               return sum + (completion.tasks?.points_value || 10)
+             }, 0)
+           }
+          
+          // Get total completed tasks
+          const { data: completedTasks, error: completedError } = await supabase
+            .from('task_assignments')
+            .select('id')
+            .eq('completed_by', profile.id)
+            .eq('is_completed', true)
+          
+          const completedTasksCount = completedError ? 0 : (completedTasks?.length || 0)
+          
+          return {
+            userId: profile.id,
+            displayName: profile.display_name,
+            avatarUrl: profile.avatar_url,
+            totalPoints: profile.total_points,
+            weeklyPoints,
+            monthlyPoints,
+            currentStreak: profile.current_streak,
+            completedTasks: completedTasksCount,
+            rank: index + 1
+          }
+        })
+      )
+      
+      return leaderboardWithStats
+    },
+    enabled: !!householdId,
+    staleTime: 1000 * 60 * 2, // 2 minutes
+  })
+}
+
+// Get user dashboard statistics
+export function useUserDashboardStats(userId: string | null, householdId: string | null) {
+  return useQuery({
+    queryKey: ['dashboard-stats', userId, householdId],
+    queryFn: async () => {
+      if (!userId || !householdId) throw new Error('Missing user or household ID')
+      
+      const today = new Date()
+      const todayStr = today.toISOString().split('T')[0]
+      
+      // Get today's tasks for the user
+      const { data: todayAssignments, error: todayError } = await supabase
+        .from('task_assignments')
+        .select(`
+          *,
+          tasks(title, points_value, household_id)
+        `)
+        .eq('assigned_to', userId)
+        .eq('due_date', todayStr)
+        .eq('tasks.household_id', householdId)
+      
+      if (todayError) throw todayError
+      
+      const todayTasks = todayAssignments || []
+      const completedToday = todayTasks.filter(task => task.is_completed).length
+      
+      // Get overdue tasks
+      const { data: overdueAssignments, error: overdueError } = await supabase
+        .from('task_assignments')
+        .select(`
+          *,
+          tasks(title, points_value, household_id)
+        `)
+        .eq('assigned_to', userId)
+        .lt('due_date', todayStr)
+        .eq('is_completed', false)
+        .eq('tasks.household_id', householdId)
+      
+      if (overdueError) throw overdueError
+      
+      const overdueTasks = overdueAssignments || []
+      
+      // Get weekly stats
+      const weekAgo = new Date()
+      weekAgo.setDate(weekAgo.getDate() - 7)
+      
+             const { data: weeklyCompletions, error: weeklyError } = await supabase
+         .from('task_assignments')
+         .select('tasks(points_value)')
+         .eq('completed_by', userId)
+         .eq('is_completed', true)
+         .gte('completed_at', weekAgo.toISOString())
+       
+       let weeklyPoints = 0
+       let weeklyTasks = 0
+       if (!weeklyError && weeklyCompletions) {
+         weeklyTasks = weeklyCompletions.length
+         weeklyPoints = weeklyCompletions.reduce((sum, completion: any) => {
+           return sum + (completion.tasks?.points_value || 10)
+         }, 0)
+       }
+      
+      // Get household average for comparison
+      const { data: householdProfiles, error: householdError } = await supabase
+        .from('profiles')
+        .select('total_points')
+        .eq('household_id', householdId)
+      
+      let householdAverage = 0
+      if (!householdError && householdProfiles && householdProfiles.length > 0) {
+        const totalHouseholdPoints = householdProfiles.reduce((sum, profile) => sum + profile.total_points, 0)
+        householdAverage = Math.round(totalHouseholdPoints / householdProfiles.length)
+      }
+      
+      // Get upcoming tasks (next 3 days)
+      const threeDaysFromNow = new Date()
+      threeDaysFromNow.setDate(threeDaysFromNow.getDate() + 3)
+      const threeDaysStr = threeDaysFromNow.toISOString().split('T')[0]
+      
+      const { data: upcomingAssignments, error: upcomingError } = await supabase
+        .from('task_assignments')
+        .select(`
+          *,
+          tasks(title, points_value)
+        `)
+        .eq('assigned_to', userId)
+        .gt('due_date', todayStr)
+        .lte('due_date', threeDaysStr)
+        .eq('is_completed', false)
+        .order('due_date', { ascending: true })
+      
+      const upcomingTasks = upcomingError ? [] : (upcomingAssignments || [])
+      
+      return {
+        todayTasks: todayTasks.length,
+        completedToday,
+        overdueTasks: overdueTasks.length,
+        weeklyTasks,
+        weeklyPoints,
+        householdAverage,
+        upcomingTasks: upcomingTasks.slice(0, 3), // Next 3 upcoming tasks
+        efficiency: todayTasks.length > 0 ? Math.round((completedToday / todayTasks.length) * 100) : 100
+      }
+    },
+    enabled: !!userId && !!householdId,
+    staleTime: 1000 * 60 * 1, // 1 minute for dashboard stats
+  })
+}
+
+// Get household overview stats
+export function useHouseholdStats(householdId: string | null) {
+  return useQuery({
+    queryKey: ['household-stats', householdId],
+    queryFn: async () => {
+      if (!householdId) throw new Error('No household ID provided')
+      
+      const today = new Date()
+      const todayStr = today.toISOString().split('T')[0]
+      
+      // Get all household members
+      const { data: members, error: membersError } = await supabase
+        .from('profiles')
+        .select('id, display_name, current_streak, total_points')
+        .eq('household_id', householdId)
+      
+      if (membersError) throw membersError
+      
+      const memberCount = members?.length || 0
+      
+      // Get today's tasks for the household
+      const { data: todayAssignments, error: todayError } = await supabase
+        .from('task_assignments')
+        .select(`
+          is_completed,
+          tasks(household_id)
+        `)
+        .eq('due_date', todayStr)
+        .eq('tasks.household_id', householdId)
+      
+      if (todayError) throw todayError
+      
+      const todayTasks = todayAssignments || []
+      const completedTodayHousehold = todayTasks.filter(task => task.is_completed).length
+      const totalTodayHousehold = todayTasks.length
+      
+      // Calculate total household points
+      const totalHouseholdPoints = members?.reduce((sum, member) => sum + member.total_points, 0) || 0
+      
+             // Find member with highest streak
+       const topStreakMember = members?.reduce((top: any, member: any) => 
+         member.current_streak > (top?.current_streak || 0) ? member : top
+       , members?.[0] || null)
+      
+      // Get weekly household activity
+      const weekAgo = new Date()
+      weekAgo.setDate(weekAgo.getDate() - 7)
+      
+      const { data: weeklyCompletions, error: weeklyError } = await supabase
+        .from('task_assignments')
+        .select(`
+          completed_by,
+          tasks(household_id)
+        `)
+        .eq('is_completed', true)
+        .eq('tasks.household_id', householdId)
+        .gte('completed_at', weekAgo.toISOString())
+      
+      const weeklyTasksCompleted = weeklyError ? 0 : (weeklyCompletions?.length || 0)
+      
+      return {
+        memberCount,
+        totalTodayTasks: totalTodayHousehold,
+        completedTodayTasks: completedTodayHousehold,
+        totalPoints: totalHouseholdPoints,
+        topStreakMember,
+        weeklyTasksCompleted,
+        householdEfficiency: totalTodayHousehold > 0 ? Math.round((completedTodayHousehold / totalTodayHousehold) * 100) : 100
+      }
+    },
+    enabled: !!householdId,
+    staleTime: 1000 * 60 * 2, // 2 minutes
+  })
+}
