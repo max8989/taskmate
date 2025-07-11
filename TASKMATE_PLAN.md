@@ -319,7 +319,7 @@ async function scheduleReminderNotifications(assignment: TaskAssignment, task: T
 
 **Core Features:**
 - [x] User authentication and household management
-- [ ] Task creation (one-time and recurring)
+- [x] Task creation (one-time and recurring)
 - [ ] Task assignment and rotation
 - [ ] Task completion with points
 - [ ] Streak tracking and leaderboard
