@@ -2,7 +2,7 @@ import { LinearGradient } from 'expo-linear-gradient'
 import { useRouter } from 'expo-router'
 import React, { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Alert, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native'
+import { Alert, Modal, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { useAuth } from '../../../hooks/useAuth'
 import { useHouseholdMembers } from '../../hooks/useHouseholdQuery'
 import { useCreateTask } from '../../hooks/useTaskQuery'
@@ -36,6 +36,105 @@ const DAYS_OF_WEEK = [
   { value: 6, label: 'Saturday', short: 'Sat' },
 ]
 
+// Generate hours and minutes for time picker
+const generateHours = () => Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0'))
+const generateMinutes = () => Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0'))
+
+interface TimePickerModalProps {
+  visible: boolean
+  initialTime: string
+  onClose: () => void
+  onConfirm: (time: string) => void
+  title: string
+}
+
+function TimePickerModal({ visible, initialTime, onClose, onConfirm, title }: TimePickerModalProps) {
+  const [selectedHour, setSelectedHour] = useState(initialTime.split(':')[0] || '09')
+  const [selectedMinute, setSelectedMinute] = useState(initialTime.split(':')[1] || '00')
+  
+  const hours = generateHours()
+  const minutes = generateMinutes()
+
+  const handleConfirm = () => {
+    onConfirm(`${selectedHour}:${selectedMinute}`)
+    onClose()
+  }
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <Text style={styles.modalTitle}>{title}</Text>
+          
+          <View style={styles.timePickerContainer}>
+            <View style={styles.timeColumn}>
+              <Text style={styles.timeColumnLabel}>Hour</Text>
+              <ScrollView style={styles.timeScrollView} showsVerticalScrollIndicator={false}>
+                {hours.map((hour) => (
+                  <TouchableOpacity
+                    key={hour}
+                    style={[
+                      styles.timeOption,
+                      selectedHour === hour && styles.timeOptionSelected
+                    ]}
+                    onPress={() => setSelectedHour(hour)}
+                  >
+                    <Text style={[
+                      styles.timeOptionText,
+                      selectedHour === hour && styles.timeOptionTextSelected
+                    ]}>
+                      {hour}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+            
+            <Text style={styles.timeSeparator}>:</Text>
+            
+            <View style={styles.timeColumn}>
+              <Text style={styles.timeColumnLabel}>Minute</Text>
+              <ScrollView style={styles.timeScrollView} showsVerticalScrollIndicator={false}>
+                {minutes.map((minute) => (
+                  <TouchableOpacity
+                    key={minute}
+                    style={[
+                      styles.timeOption,
+                      selectedMinute === minute && styles.timeOptionSelected
+                    ]}
+                    onPress={() => setSelectedMinute(minute)}
+                  >
+                    <Text style={[
+                      styles.timeOptionText,
+                      selectedMinute === minute && styles.timeOptionTextSelected
+                    ]}>
+                      {minute}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          </View>
+          
+          <View style={styles.modalButtons}>
+            <TouchableOpacity style={styles.modalCancelButton} onPress={onClose}>
+              <Text style={styles.modalCancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.modalConfirmButton} onPress={handleConfirm}>
+              <Text style={styles.modalConfirmButtonText}>Confirm</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  )
+}
+
 export function TaskCreateScreen() {
   const { t } = useTranslation()
   const router = useRouter()
@@ -56,6 +155,8 @@ export function TaskCreateScreen() {
   })
   
   const [selectedParticipants, setSelectedParticipants] = useState<string[]>([])
+  const [timePickerVisible, setTimePickerVisible] = useState(false)
+  const [earliestTimePickerVisible, setEarliestTimePickerVisible] = useState(false)
   
   const createTaskMutation = useCreateTask()
 
@@ -228,16 +329,27 @@ export function TaskCreateScreen() {
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Repeat Every</Text>
                 <View style={styles.repeatContainer}>
-                  <TextInput
-                    style={styles.repeatInput}
-                    value={formData.frequency_value.toString()}
-                    onChangeText={(text) => {
-                      const value = parseInt(text) || 1
-                      setFormData(prev => ({ ...prev, frequency_value: Math.max(1, value) }))
-                    }}
-                    keyboardType="numeric"
-                    maxLength={2}
-                  />
+                  <TouchableOpacity
+                    style={styles.repeatButton}
+                    onPress={() => setFormData(prev => ({ 
+                      ...prev, 
+                      frequency_value: Math.max(1, prev.frequency_value - 1) 
+                    }))}
+                  >
+                    <Text style={styles.repeatButtonText}>-</Text>
+                  </TouchableOpacity>
+                  <View style={styles.repeatValueContainer}>
+                    <Text style={styles.repeatValue}>{formData.frequency_value}</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.repeatButton}
+                    onPress={() => setFormData(prev => ({ 
+                      ...prev, 
+                      frequency_value: Math.min(99, prev.frequency_value + 1) 
+                    }))}
+                  >
+                    <Text style={styles.repeatButtonText}>+</Text>
+                  </TouchableOpacity>
                   <Text style={styles.repeatLabel}>
                     {formData.frequency_type === 'daily' ? 'day(s)' :
                      formData.frequency_type === 'weekly' ? 'week(s)' : 
@@ -272,34 +384,24 @@ export function TaskCreateScreen() {
                 </View>
               )}
 
-                             {/* Scheduled Time (for all recurring tasks) */}
-               <View style={styles.inputGroup}>
-                 <Text style={styles.label}>Scheduled Time</Text>
-                 <Text style={styles.helpText}>
-                   {formData.frequency_type === 'daily' ? 'Daily at this time' :
-                    formData.frequency_type === 'weekly' ? 'Weekly on selected days at this time' :
-                    'Monthly at this time'}
-                 </Text>
-                 <View style={styles.scheduledTimeContainer}>
-                   <TextInput
-                     style={styles.scheduledTimeInput}
-                     value={formData.scheduled_time}
-                     onChangeText={(text) => {
-                       // Basic time format validation
-                       const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/
-                       if (text.length <= 5) {
-                         setFormData(prev => ({ ...prev, scheduled_time: text }))
-                       }
-                     }}
-                     keyboardType="numeric"
-                     maxLength={5}
-                     placeholder="HH:MM"
-                   />
-                   <Text style={styles.scheduledTimeLabel}>
-                     24-hour format (e.g., 09:00, 14:30)
-                   </Text>
-                 </View>
-               </View>
+              {/* Scheduled Time (for all recurring tasks) */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Scheduled Time</Text>
+                <Text style={styles.helpText}>
+                  {formData.frequency_type === 'daily' ? 'Daily at this time' :
+                   formData.frequency_type === 'weekly' ? 'Weekly on selected days at this time' :
+                   'Monthly at this time'}
+                </Text>
+                <TouchableOpacity 
+                  style={styles.timeButton}
+                  onPress={() => setTimePickerVisible(true)}
+                >
+                  <Text style={styles.timeButtonText}>
+                    {formData.scheduled_time || 'Select Time'}
+                  </Text>
+                  <Text style={styles.timeButtonLabel}>24-hour format</Text>
+                </TouchableOpacity>
+              </View>
             </>
           )}
 
@@ -333,25 +435,17 @@ export function TaskCreateScreen() {
             <Text style={styles.helpText}>
               Set the earliest time users can mark this task as completed. Leave blank to allow completion anytime.
             </Text>
-            <View style={styles.scheduledTimeContainer}>
-              <TextInput
-                style={styles.scheduledTimeInput}
-                value={formData.earliest_completion_time}
-                onChangeText={(text) => {
-                  // Basic time format validation
-                  const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/
-                  if (text.length <= 5) {
-                    setFormData(prev => ({ ...prev, earliest_completion_time: text }))
-                  }
-                }}
-                keyboardType="numeric"
-                maxLength={5}
-                placeholder="HH:MM (e.g., 17:00)"
-              />
-              <Text style={styles.scheduledTimeLabel}>
-                24-hour format. Users can only complete after this time on the due date.
+            <TouchableOpacity 
+              style={styles.timeButton}
+              onPress={() => setEarliestTimePickerVisible(true)}
+            >
+              <Text style={styles.timeButtonText}>
+                {formData.earliest_completion_time || 'Select Time (Optional)'}
               </Text>
-            </View>
+              <Text style={styles.timeButtonLabel}>
+                Users can only complete after this time on due date
+              </Text>
+            </TouchableOpacity>
           </View>
 
           {/* Participants Selection */}
@@ -406,6 +500,23 @@ export function TaskCreateScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Time Picker Modals */}
+      <TimePickerModal
+        visible={timePickerVisible}
+        initialTime={formData.scheduled_time}
+        onClose={() => setTimePickerVisible(false)}
+        onConfirm={(time) => setFormData(prev => ({ ...prev, scheduled_time: time }))}
+        title="Select Scheduled Time"
+      />
+      
+      <TimePickerModal
+        visible={earliestTimePickerVisible}
+        initialTime={formData.earliest_completion_time || '00:00'}
+        onClose={() => setEarliestTimePickerVisible(false)}
+        onConfirm={(time) => setFormData(prev => ({ ...prev, earliest_completion_time: time }))}
+        title="Select Earliest Completion Time"
+      />
     </View>
   )
 }
@@ -425,7 +536,7 @@ const styles = StyleSheet.create({
   content: {
     flexGrow: 1,
     paddingHorizontal: 20,
-    paddingTop: 60,
+    paddingTop: 50,
     paddingBottom: 40,
   },
   header: {
@@ -482,6 +593,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6B7280',
     marginTop: 4,
+    flexWrap: 'wrap',
   },
   switchContainer: {
     flexDirection: 'row',
@@ -543,15 +655,34 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
-  repeatInput: {
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
+  repeatButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
     borderRadius: 8,
-    padding: 12,
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  repeatButtonText: {
+    fontSize: 20,
+    color: '#6B7280',
+    fontWeight: 'bold',
+  },
+  repeatValueContainer: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    alignItems: 'center',
+  },
+  repeatValue: {
     fontSize: 16,
-    backgroundColor: '#FFFFFF',
-    width: 60,
-    textAlign: 'center',
+    color: '#374151',
+    fontWeight: '600',
   },
   repeatLabel: {
     fontSize: 16,
@@ -605,6 +736,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6B7280',
     fontWeight: '500',
+    flexShrink: 1,
   },
   participantButtonTextActive: {
     color: '#FFFFFF',
@@ -671,23 +803,128 @@ const styles = StyleSheet.create({
   scheduledDayButtonTextActive: {
     color: '#FFFFFF',
   },
-  scheduledTimeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  scheduledTimeInput: {
+  timeButton: {
     borderWidth: 1,
     borderColor: '#D1D5DB',
     borderRadius: 8,
     padding: 12,
-    fontSize: 16,
     backgroundColor: '#FFFFFF',
-    width: 80,
-    textAlign: 'center',
+    alignItems: 'center',
   },
-  scheduledTimeLabel: {
+  timeButtonText: {
+    fontSize: 16,
+    color: '#374151',
+    fontWeight: '500',
+  },
+  timeButtonLabel: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 2,
+    textAlign: 'center',
+    flexWrap: 'wrap',
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 24,
+    width: '90%',
+    maxWidth: 400,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  timePickerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+  },
+  timeColumn: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  timeColumnLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 8,
+  },
+  timeScrollView: {
+    height: 200,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    backgroundColor: '#F9FAFB',
+  },
+  timeOption: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  timeOptionSelected: {
+    backgroundColor: '#FF6B4D',
+  },
+  timeOptionText: {
+    fontSize: 16,
+    color: '#374151',
+  },
+  timeOptionTextSelected: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  timeSeparator: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#374151',
+    marginHorizontal: 16,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  modalCancelButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+  },
+  modalCancelButtonText: {
     fontSize: 16,
     color: '#6B7280',
+    fontWeight: '600',
+  },
+  modalConfirmButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: '#FF6B4D',
+    alignItems: 'center',
+  },
+  modalConfirmButtonText: {
+    fontSize: 16,
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
 })

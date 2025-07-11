@@ -1,5 +1,5 @@
 import { LinearGradient } from 'expo-linear-gradient'
-import { useLocalSearchParams, useRouter } from 'expo-router'
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
@@ -52,21 +52,27 @@ export default function TaskDetailScreen() {
 
   if (taskLoading || assignmentsLoading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#FF6B4D" />
-        <Text style={styles.loadingText}>Loading task details...</Text>
-      </View>
+      <>
+        <Stack.Screen options={{ headerShown: false }} />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#FF6B4D" />
+          <Text style={styles.loadingText}>Loading task details...</Text>
+        </View>
+      </>
     )
   }
 
   if (!task) {
     return (
-      <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>Task not found</Text>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Text style={styles.backButtonText}>Go Back</Text>
-        </TouchableOpacity>
-      </View>
+      <>
+        <Stack.Screen options={{ headerShown: false }} />
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>Task not found</Text>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+            <Text style={styles.backButtonText}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
+      </>
     )
   }
 
@@ -167,230 +173,233 @@ export default function TaskDetailScreen() {
   const isUserAllowedToEdit = (task.created_by === user?.id || profile?.role === 'admin') && !task.is_deleted
 
   return (
-    <View style={styles.container}>
-      <LinearGradient
-        colors={['#FFF8F0', '#FFE8D6']}
-        style={styles.gradient}
-      />
-      
-      <ScrollView contentContainerStyle={styles.content}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-            <Text style={styles.backButtonText}>← Back</Text>
-          </TouchableOpacity>
-          <Text style={styles.title}>{task.title}</Text>
-          <View style={styles.badgesContainer}>
-            {task.is_recurring && (
-              <View style={styles.recurringBadge}>
-                <Text style={styles.recurringText}>🔄 Recurring</Text>
-              </View>
-            )}
-            {task.is_deleted && (
-              <View style={styles.deletedBadge}>
-                <Text style={styles.deletedText}>🗑️ Deleted</Text>
-              </View>
-            )}
-          </View>
-        </View>
-
-        {/* Main Content */}
-        <View style={styles.contentCard}>
-          {/* Description */}
-          {task.description && (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Description</Text>
-              <Text style={styles.description}>{task.description}</Text>
-            </View>
-          )}
-
-          {/* Task Details */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Task Details</Text>
-            <View style={styles.detailsGrid}>
-              <View style={styles.detailItem}>
-                <Text style={styles.detailLabel}>Category</Text>
-                <Text style={styles.detailValue}>{task.category}</Text>
-              </View>
-              <View style={styles.detailItem}>
-                <Text style={styles.detailLabel}>Points</Text>
-                <Text style={styles.detailValue}>{task.points_value}</Text>
-              </View>
-              <View style={styles.detailItem}>
-                <Text style={styles.detailLabel}>Type</Text>
-                <Text style={styles.detailValue}>
-                  {task.is_recurring ? `Recurring (${task.frequency_type})` : 'One-time'}
-                </Text>
-              </View>
-              {task.created_by_profile && (
-                <View style={styles.detailItem}>
-                  <Text style={styles.detailLabel}>Created by</Text>
-                  <Text style={styles.detailValue}>{task.created_by_profile.display_name}</Text>
+    <>
+      <Stack.Screen options={{ headerShown: false }} />
+      <View style={styles.container}>
+        <LinearGradient
+          colors={['#FFF8F0', '#FFE8D6']}
+          style={styles.gradient}
+        />
+        
+        <ScrollView contentContainerStyle={styles.content}>
+          {/* Header */}
+          <View style={styles.header}>
+            <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+              <Text style={styles.backButtonText}>← Back</Text>
+            </TouchableOpacity>
+            <Text style={styles.title}>{task.title}</Text>
+            <View style={styles.badgesContainer}>
+              {task.is_recurring && (
+                <View style={styles.recurringBadge}>
+                  <Text style={styles.recurringText}>🔄 Recurring</Text>
                 </View>
               )}
-              {task.is_deleted && task.deleted_by_profile && (
-                <View style={styles.detailItem}>
-                  <Text style={styles.detailLabel}>Deleted by</Text>
-                  <Text style={styles.detailValue}>{task.deleted_by_profile.display_name}</Text>
-                </View>
-              )}
-              {task.is_deleted && task.deleted_at && (
-                <View style={styles.detailItem}>
-                  <Text style={styles.detailLabel}>Deleted on</Text>
-                  <Text style={styles.detailValue}>
-                    {new Date(task.deleted_at).toLocaleDateString()}
-                  </Text>
+              {task.is_deleted && (
+                <View style={styles.deletedBadge}>
+                  <Text style={styles.deletedText}>🗑️ Deleted</Text>
                 </View>
               )}
             </View>
           </View>
 
-          {/* Scheduling Information */}
-          {task.is_recurring && (
+          {/* Main Content */}
+          <View style={styles.contentCard}>
+            {/* Description */}
+            {task.description && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Description</Text>
+                <Text style={styles.description}>{task.description}</Text>
+              </View>
+            )}
+
+            {/* Task Details */}
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Schedule</Text>
+              <Text style={styles.sectionTitle}>Task Details</Text>
               <View style={styles.detailsGrid}>
-                {task.scheduled_time && (
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>Time</Text>
-                    <Text style={styles.detailValue}>{formatTime(task.scheduled_time)}</Text>
-                  </View>
-                )}
-                {task.frequency_type === 'weekly' && task.scheduled_days && task.scheduled_days.length > 0 && (
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>Days</Text>
-                    <Text style={styles.detailValue}>{formatScheduledDays(task.scheduled_days)}</Text>
-                  </View>
-                )}
                 <View style={styles.detailItem}>
-                  <Text style={styles.detailLabel}>Repeat</Text>
+                  <Text style={styles.detailLabel}>Category</Text>
+                  <Text style={styles.detailValue}>{task.category}</Text>
+                </View>
+                <View style={styles.detailItem}>
+                  <Text style={styles.detailLabel}>Points</Text>
+                  <Text style={styles.detailValue}>{task.points_value}</Text>
+                </View>
+                <View style={styles.detailItem}>
+                  <Text style={styles.detailLabel}>Type</Text>
                   <Text style={styles.detailValue}>
-                    Every {task.frequency_value} {task.frequency_type === 'daily' ? 'day(s)' : 
-                           task.frequency_type === 'weekly' ? 'week(s)' : 'month(s)'}
+                    {task.is_recurring ? `Recurring (${task.frequency_type})` : 'One-time'}
+                  </Text>
+                </View>
+                {task.created_by_profile && (
+                  <View style={styles.detailItem}>
+                    <Text style={styles.detailLabel}>Created by</Text>
+                    <Text style={styles.detailValue}>{task.created_by_profile.display_name}</Text>
+                  </View>
+                )}
+                {task.is_deleted && task.deleted_by_profile && (
+                  <View style={styles.detailItem}>
+                    <Text style={styles.detailLabel}>Deleted by</Text>
+                    <Text style={styles.detailValue}>{task.deleted_by_profile.display_name}</Text>
+                  </View>
+                )}
+                {task.is_deleted && task.deleted_at && (
+                  <View style={styles.detailItem}>
+                    <Text style={styles.detailLabel}>Deleted on</Text>
+                    <Text style={styles.detailValue}>
+                      {new Date(task.deleted_at).toLocaleDateString()}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </View>
+
+            {/* Scheduling Information */}
+            {task.is_recurring && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Schedule</Text>
+                <View style={styles.detailsGrid}>
+                  {task.scheduled_time && (
+                    <View style={styles.detailItem}>
+                      <Text style={styles.detailLabel}>Time</Text>
+                      <Text style={styles.detailValue}>{formatTime(task.scheduled_time)}</Text>
+                    </View>
+                  )}
+                  {task.frequency_type === 'weekly' && task.scheduled_days && task.scheduled_days.length > 0 && (
+                    <View style={styles.detailItem}>
+                      <Text style={styles.detailLabel}>Days</Text>
+                      <Text style={styles.detailValue}>{formatScheduledDays(task.scheduled_days)}</Text>
+                    </View>
+                  )}
+                  <View style={styles.detailItem}>
+                    <Text style={styles.detailLabel}>Repeat</Text>
+                    <Text style={styles.detailValue}>
+                      Every {task.frequency_value} {task.frequency_type === 'daily' ? 'day(s)' : 
+                             task.frequency_type === 'weekly' ? 'week(s)' : 'month(s)'}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            )}
+
+            {/* Completion Restrictions */}
+            {task.earliest_completion_time && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Completion Rules</Text>
+                <View style={styles.completionRule}>
+                  <Text style={styles.completionRuleText}>
+                    ⏰ Can only be completed after {formatTime(task.earliest_completion_time)} on the due date
                   </Text>
                 </View>
               </View>
-            </View>
-          )}
+            )}
 
-          {/* Completion Restrictions */}
-          {task.earliest_completion_time && (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Completion Rules</Text>
-              <View style={styles.completionRule}>
-                <Text style={styles.completionRuleText}>
-                  ⏰ Can only be completed after {formatTime(task.earliest_completion_time)} on the due date
-                </Text>
-              </View>
-            </View>
-          )}
-
-          {/* Participants */}
-          {task.task_participants && task.task_participants.length > 0 && (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Participants (Rotation Order)</Text>
-              <View style={styles.participantsList}>
-                {task.task_participants.map((participant: any, index: number) => (
-                  <View key={participant.id} style={styles.participantItem}>
-                    <Text style={styles.participantOrder}>{index + 1}.</Text>
-                    <Text style={styles.participantName}>{participant.profiles?.display_name}</Text>
-                  </View>
-                ))}
-              </View>
-            </View>
-          )}
-
-          {/* Pending Assignments */}
-          {pendingAssignments && pendingAssignments.length > 0 && (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Pending Assignments</Text>
-              {pendingAssignments.map((assignment: any) => {
-                const isOverdue = new Date(assignment.due_date) < new Date()
-                const completionCheck = canCompleteTask(task, assignment)
-                const isAssignedToCurrentUser = assignment.assigned_to === user?.id
-                
-                return (
-                  <TouchableOpacity
-                    key={assignment.id}
-                    style={[
-                      styles.assignmentCard,
-                      isOverdue && styles.overdueAssignment,
-                      !isAssignedToCurrentUser && styles.householdAssignment,
-                      task.is_deleted && styles.deletedAssignment
-                    ]}
-                    onPress={() => handleCompleteAssignment(assignment)}
-                    disabled={task.is_deleted || !completionCheck.allowed || completeTaskMutation.isPending}
-                  >
-                    <View style={styles.assignmentHeader}>
-                      <Text style={styles.assignmentAssignee}>
-                        {assignment.assigned_to_profile?.display_name}
-                        {isAssignedToCurrentUser && ' (You)'}
-                      </Text>
-                      <Text style={[
-                        styles.assignmentDue,
-                        isOverdue && styles.overdueText
-                      ]}>
-                        Due: {formatDate(assignment.due_date)}
-                        {isOverdue && ' (Overdue)'}
-                      </Text>
+            {/* Participants */}
+            {task.task_participants && task.task_participants.length > 0 && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Participants (Rotation Order)</Text>
+                <View style={styles.participantsList}>
+                  {task.task_participants.map((participant: any, index: number) => (
+                    <View key={participant.id} style={styles.participantItem}>
+                      <Text style={styles.participantOrder}>{index + 1}.</Text>
+                      <Text style={styles.participantName}>{participant.profiles?.display_name}</Text>
                     </View>
-                    
-                    {task.earliest_completion_time && (
+                  ))}
+                </View>
+              </View>
+            )}
+
+            {/* Pending Assignments */}
+            {pendingAssignments && pendingAssignments.length > 0 && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Pending Assignments</Text>
+                {pendingAssignments.map((assignment: any) => {
+                  const isOverdue = new Date(assignment.due_date) < new Date()
+                  const completionCheck = canCompleteTask(task, assignment)
+                  const isAssignedToCurrentUser = assignment.assigned_to === user?.id
+                  
+                  return (
+                    <TouchableOpacity
+                      key={assignment.id}
+                      style={[
+                        styles.assignmentCard,
+                        isOverdue && styles.overdueAssignment,
+                        !isAssignedToCurrentUser && styles.householdAssignment,
+                        task.is_deleted && styles.deletedAssignment
+                      ]}
+                      onPress={() => handleCompleteAssignment(assignment)}
+                      disabled={task.is_deleted || !completionCheck.allowed || completeTaskMutation.isPending}
+                    >
+                      <View style={styles.assignmentHeader}>
+                        <Text style={styles.assignmentAssignee}>
+                          {assignment.assigned_to_profile?.display_name}
+                          {isAssignedToCurrentUser && ' (You)'}
+                        </Text>
+                        <Text style={[
+                          styles.assignmentDue,
+                          isOverdue && styles.overdueText
+                        ]}>
+                          Due: {formatDate(assignment.due_date)}
+                          {isOverdue && ' (Overdue)'}
+                        </Text>
+                      </View>
+                      
+                      {task.earliest_completion_time && (
+                        <Text style={[
+                          styles.completionTimeText,
+                          !completionCheck.allowed && styles.restrictedTimeText
+                        ]}>
+                          {completionCheck.allowed 
+                            ? `Can complete after ${task.earliest_completion_time}` 
+                            : `Available after ${task.earliest_completion_time} today`
+                          }
+                        </Text>
+                      )}
+                      
                       <Text style={[
-                        styles.completionTimeText,
+                        styles.assignmentAction,
                         !completionCheck.allowed && styles.restrictedTimeText
                       ]}>
-                        {completionCheck.allowed 
-                          ? `Can complete after ${task.earliest_completion_time}` 
-                          : `Available after ${task.earliest_completion_time} today`
+                        {task.is_deleted ? 'Task deleted - Cannot complete' :
+                         completeTaskMutation.isPending ? 'Completing...' : 
+                         !completionCheck.allowed ? completionCheck.message :
+                         isAssignedToCurrentUser ? 'Tap to complete your task' : 
+                         'Tap to help complete this task'
                         }
                       </Text>
-                    )}
-                    
-                    <Text style={[
-                      styles.assignmentAction,
-                      !completionCheck.allowed && styles.restrictedTimeText
-                    ]}>
-                      {task.is_deleted ? 'Task deleted - Cannot complete' :
-                       completeTaskMutation.isPending ? 'Completing...' : 
-                       !completionCheck.allowed ? completionCheck.message :
-                       isAssignedToCurrentUser ? 'Tap to complete your task' : 
-                       'Tap to help complete this task'
-                      }
-                    </Text>
-                  </TouchableOpacity>
-                )
-              })}
-            </View>
-          )}
+                    </TouchableOpacity>
+                  )
+                })}
+              </View>
+            )}
 
-          {/* Action Buttons */}
-          <View style={styles.actionButtons}>
-            {isUserAllowedToEdit && (
-              <TouchableOpacity
-                style={styles.editButton}
-                onPress={handleEdit}
-                disabled={deleteTaskMutation.isPending}
-              >
-                <Text style={styles.editButtonText}>✏️ Edit Task</Text>
-              </TouchableOpacity>
-            )}
-            
-            {isUserAllowedToEdit && (
-              <TouchableOpacity
-                style={styles.deleteButton}
-                onPress={handleDelete}
-                disabled={deleteTaskMutation.isPending}
-              >
-                <Text style={styles.deleteButtonText}>
-                  {deleteTaskMutation.isPending ? 'Deleting...' : '🗑️ Delete Task'}
-                </Text>
-              </TouchableOpacity>
-            )}
+            {/* Action Buttons */}
+            <View style={styles.actionButtons}>
+              {isUserAllowedToEdit && (
+                <TouchableOpacity
+                  style={styles.editButton}
+                  onPress={handleEdit}
+                  disabled={deleteTaskMutation.isPending}
+                >
+                  <Text style={styles.editButtonText}>✏️ Edit Task</Text>
+                </TouchableOpacity>
+              )}
+              
+              {isUserAllowedToEdit && (
+                <TouchableOpacity
+                  style={styles.deleteButton}
+                  onPress={handleDelete}
+                  disabled={deleteTaskMutation.isPending}
+                >
+                  <Text style={styles.deleteButtonText}>
+                    {deleteTaskMutation.isPending ? 'Deleting...' : '🗑️ Delete Task'}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
-        </View>
-      </ScrollView>
-    </View>
+        </ScrollView>
+      </View>
+    </>
   )
 }
 
@@ -409,7 +418,7 @@ const styles = StyleSheet.create({
   content: {
     flexGrow: 1,
     paddingHorizontal: 20,
-    paddingTop: 60,
+    paddingTop: 50,
     paddingBottom: 40,
   },
   loadingContainer: {
